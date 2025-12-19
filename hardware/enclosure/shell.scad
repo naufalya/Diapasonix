@@ -52,7 +52,7 @@ module battery_holder() {
         ]);
         
         // Battery socket
-        translate(center(battery_socket_w + battery_socket_clearance, battery_socket_d + battery_socket_d_offset, 0)) 
+        translate(center(battery_socket_w + battery_socket_clearance, battery_socket_d + battery_socket_d_offset+0.01, 0)) 
         cube([battery_socket_w + battery_socket_wall, battery_socket_d + battery_socket_d_offset, battery_socket_h]);
         
         // Negative terminal socket
@@ -89,6 +89,7 @@ module battery_holder() {
         // - symbol
         translate([battery_symbol_pos_x_minus, battery_symbol_y, battery_symbol_z])
         cube([battery_symbol_w, battery_symbol_h, battery_symbol_h]);
+        
     }
 }
 module speaker_holder() {
@@ -107,34 +108,6 @@ module speaker_holder() {
     }
 }
 
-/*
-module pico_holder(){
-    difference(){
-            cube([4,neck_d,8.5]);
-            // Screw holes 
-            translate([2,neck_d/2-5.68,2])
-            cylinder(h=6.3, r=screw_hole_r);
-            translate([2,neck_d/2+5.68,2])
-            cylinder(h=6.3, r=screw_hole_r);
-        }
-    difference(){
-     // Main shape
-    x1 = 0;
-    x2 = 16.0;
-    y2 = 4.8;
-        
-    translate([4,0,0])
-    rotate([90,0,90])
-    linear_extrude(50)
-    polygon([
-    [0, neck_r1], [x1,neck_r1], [x2, y2], [neck_d-x2, y2], [neck_d-x1, neck_r1],[neck_d, neck_r1], [neck_d,0], [0, 0],
-    ]);
-    }
-    
-    //translate([4,neck_d/2-21/2,5.5])
-    //#cube([21,21,1]);
-}*/
-
 module shell_inner_supports() {
     intersection(){
         translate([neck_w/2,neck_d/2,0])
@@ -142,12 +115,9 @@ module shell_inner_supports() {
         
         union(){
             wedge_h = neck_r1*.57;
-        // Pico support
-        //translate([neck_w-50-wall_d,0,-neck_r1])
-        //pico_holder();
             
         // Inset reinforcement
-        translate([neck_w-wall_d,neck_r1-(tray_w+tray_m*2)/2,-neck_r1])
+        translate([neck_w-wall_d,neck_r1-(tray_w+tray_m*2)/2,-neck_r1+0.01])
         rotate([0,-90,0])
         cube([neck_r1,tray_w+tray_m*2,wall_d]);
         
@@ -169,8 +139,3 @@ module shell(){
             neck_shape(_offset=wall_d);
         };
 }
-
-/*
-shell();
-shell_inner_supports();
-//*/

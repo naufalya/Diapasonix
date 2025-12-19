@@ -89,7 +89,7 @@ module body(){
             
             // Navigation switch support
             translate([neck_w - oled_pos_x + nav_switch_pos_x_offset + nav_switch_pos_y_offset, neck_d / 2 - nav_switch_pos_y_base - wall_d, -nav_switch_pos_h - wall_d])
-            cube([nav_switch_cross_w, nav_switch_cross_d - wall_d * 2, wall_d + nav_switch_pos_h]);
+            cube([nav_switch_cross_w, nav_switch_cross_d - wall_d/2, wall_d + nav_switch_pos_h]);
             
             // OLED underside supports
             translate([neck_w - oled_pos_x - 5.5, neck_d / 2 - oled_support_top_offset, -wall_d - 2])
@@ -133,8 +133,8 @@ module body(){
         cylinder(r = threaded_insert_r, h = threaded_insert_h, $fn = 64);
         
         // OLED opening
-        translate([neck_w - oled_pos_x - 5.1, neck_d / 2 - oled_opening_top_offset, -2])
-        cube([oled_opening_w, oled_opening_d, 3]);
+        translate([neck_w - oled_pos_x - oled_clearance, neck_d / 2 - oled_pos_y_offset - oled_clearance, -wall_d])
+        cube([oled_opening_w, oled_opening_d, oled_opening_z]);
         
         // Navigation switch opening
         translate([neck_w - oled_pos_x + nav_switch_pos_x_offset + 0.2, neck_d / 2 - nav_switch_pos_y_base, -3.8])
@@ -159,7 +159,8 @@ module body(){
     standoff(2);
     translate([neck_w - ui_screw_x_offset, wall_d + pcb_screw_offset_y + screw_pos_y_offset, -wall_d - 2])
     standoff(2);
-}
+    
+} 
 
 if(is_undef(is_root)) {
     body();

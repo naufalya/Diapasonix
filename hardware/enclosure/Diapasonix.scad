@@ -1,4 +1,4 @@
-// v1.1.0
+// v1.1.1
 // To be cleaned up, as I tried different construction
 // methods and left a trail of unused variables.
 
@@ -17,7 +17,7 @@ fret_d = 2;
 fret_h = 4; // min is fret_r
 fret_r = fret_d/2;
 fret_brim_d = 2.2;
-fret_brim_h = 0.6;
+fret_brim_h = 0.1;
 
 silicone_h = 1;
 
