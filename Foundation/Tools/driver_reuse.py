@@ -146,6 +146,9 @@ def app_only_project(project):
         raise ValueError('Unexpected driver embed phase')
     host['dependencies'] = []
     host['buildPhases'].remove(embed[0])
-    # Keep every source/configuration/resource at its original source location.
-    # The caller supplies SRCROOT and PROJECT_DIR; source root stays unchanged.
+    # Relative group/configuration references resolve from the project location,
+    # even when SRCROOT is supplied. Root the derived group at the original tree.
+    root = objects[objects[data['rootObject']]['mainGroup']]
+    root['path'] = str(project.resolve().parent.parent)
+    root['sourceTree'] = '<absolute>'
     return data

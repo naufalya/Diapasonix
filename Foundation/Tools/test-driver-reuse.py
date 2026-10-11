@@ -54,5 +54,8 @@ class DriverReuseTests(unittest.TestCase):
         self.assertFalse(any(derived['objects'][i].get('name')=='Embed Driver Extension' for i in host['buildPhases']))
         self.assertTrue(any(derived['objects'][i].get('isa')=='PBXSourcesBuildPhase' for i in host['buildPhases']))
         self.assertTrue(any(derived['objects'][i].get('isa')=='PBXResourcesBuildPhase' for i in host['buildPhases']))
+        root=derived['objects'][derived['objects'][derived['rootObject']]['mainGroup']]
+        self.assertEqual(root['path'],str(project.resolve().parent.parent))
+        self.assertEqual(root['sourceTree'],'<absolute>')
 
 if __name__=='__main__':unittest.main()

@@ -76,7 +76,8 @@ def main():
     projected.write_bytes(plistlib.dumps(app_only_project(original_project)))
     (out/'project-projection.json').write_text(json.dumps({'original_sha256':hashlib.sha256(original_project.read_bytes()).hexdigest(),
         'projected_sha256':hashlib.sha256(projected.read_bytes()).hexdigest(),
-        'changes':['Remove only host dependency on driver','Remove only host Embed Driver Extension phase'],
+        'changes':['Remove host dependency on driver','Remove host Embed Driver Extension phase',
+                   'Root project group at original source directory for relative configuration/resources'],
         'source_root':str(REPO/'Foundation')},indent=2)+'\n')
     run('app-build',['xcodebuild','-project',str(project),'-target','RewindDV','-configuration','Release',
         'SRCROOT='+str(REPO/'Foundation'),'PROJECT_DIR='+str(REPO/'Foundation'),
