@@ -22,7 +22,7 @@ def check(ok, message):
         raise ValueError(message)
 
 
-def validate_identities(status, alpha, driver, app_build=None):
+def validate_identities(status, alpha, driver, app_build=None, release_channel=None):
     check(status['schema_version'] == 1, 'Unsupported status schema')
     for name in ('development', 'public_release'):
         identity = status[name]
@@ -30,6 +30,8 @@ def validate_identities(status, alpha, driver, app_build=None):
         check(type(identity['driver_build']) is int and identity['driver_build'] > 0, 'Invalid driver build')
         check(re.fullmatch(r'[0-9a-f]{40}', identity['source_revision']), 'Full public source revision required')
     check(status['development'].get('release_channel') in ('alpha','beta'), 'Invalid development channel')
+    if release_channel is not None:
+        check(status['development']['release_channel'] == release_channel, 'Development channel disagrees with canonical source')
     check(status['development']['application_version'] == alpha, 'Development alpha disagrees with source')
     check(status['development']['driver_build'] == driver, 'Development driver disagrees with source')
     if app_build is not None:
@@ -175,7 +177,7 @@ def main():
     parser.add_argument('--live', action='store_true')
     args = parser.parse_args()
     status = json.loads((ROOT / 'PROJECT-STATUS.json').read_text())
-    validate_identities(status, *source_versions(ROOT), app_build=source_app_build(ROOT))
+    validate_identities(status, *source_versions(ROOT), app_build=source_app_build(ROOT), release_channel=canonical_identity(ROOT)["channel"])
     count = validate_manifest(ROOT, status)
     block = status_block(status)
     for name in DOCS:

@@ -41,6 +41,11 @@ class StatusTests(unittest.TestCase):
         del data['qualification']['hot_unload']
         with self.assertRaises(ValueError): status.validate_identities(data, ALPHA, DRIVER)
 
+    def test_channel_must_match_canonical_source(self):
+        data=copy.deepcopy(BASE);data['development']['release_channel']='beta'
+        status.validate_identities(data,ALPHA,DRIVER,release_channel='beta')
+        with self.assertRaises(ValueError):status.validate_identities(data,ALPHA,DRIVER,release_channel='alpha')
+
     def test_current_block_labels_both_lifecycles(self):
         block = status.status_block(BASE)
         self.assertIn(f"Current development:** rewindDV {ALPHA} ({BASE['development']['release_channel'].capitalize()})", block)

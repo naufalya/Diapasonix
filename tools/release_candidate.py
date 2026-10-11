@@ -285,6 +285,20 @@ def validate_distribution(receipt, entries):
                             "publication_authorized": False}.items():
         require(receipt.get(field) is expected, "Invalid distribution flag: " + field)
     d = receipt["distribution"]
+    binding = receipt['versions'].get('driver_reuse')
+    if binding:
+        require(d.get('driver_reuse') == binding, 'Retained driver source/manifest binding mismatch')
+        retained = d.get('retained_driver_manifest')
+        require(isinstance(retained, dict), 'Retained driver full manifest required')
+        require(sha(json.dumps(retained, sort_keys=True, separators=(',', ':')).encode()) == binding['bundle_manifest_sha256'],
+                'Retained signed driver manifest differs from source identity')
+        prefix = 'RewindDV.app/' + DEXT + '/'
+        actual = {p[len(prefix):]:row for p,row in entries.items() if p.startswith(prefix)}
+        expected = {p:row for p,row in retained.items() if 'sha256' in row}
+        require(set(actual) == set(expected), 'Retained driver file inventory changed')
+        for p,row in expected.items():
+            require(actual[p]['sha256'] == row['sha256'] and actual[p].get('mode') == row['mode'],
+                    'Retained signed driver bytes or mode changed')
     require(d["certificate_type"] == "Developer ID Application" and d["verification"] == "PASS", "Unverified Developer ID distribution")
     require(d["pci_primary_match"] == "0x590111C1", "Unapproved PCI grant")
     require(re.fullmatch(r"[0-9a-f]{64}", d["verification_report_sha256"]), "Missing verifier evidence digest")

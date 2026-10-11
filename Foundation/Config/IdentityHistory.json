@@ -82,6 +82,13 @@
         "bundle_manifest_sha256": "ff34d5fd4346a7412524e931817bd2f417c6b0b39478b05f86a4bb0f6dc92670"
       },
       "meaning": "Reserved host-only Beta successor; no distributed binary. RetainedDriver202 publication blocked by private lineage strings; reservation preserved, successor requires newly redacted Driver203."
+    },
+    {
+      "product_version": "0.1.11",
+      "channel": "beta",
+      "app_build": 201,
+      "driver_build": 203,
+      "meaning": "Public-source Developer ID App201/Driver203 signing base. Driver203 privacy metadata redacted; transport unchanged. Retained driver reused unchanged by host-only successor; no separate public download under this product identity."
     }
   ]
 }
