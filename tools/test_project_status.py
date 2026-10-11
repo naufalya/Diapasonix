@@ -43,11 +43,11 @@ class StatusTests(unittest.TestCase):
 
     def test_current_block_labels_both_lifecycles(self):
         block = status.status_block(BASE)
-        self.assertIn(f'Current development:** rewindDV {ALPHA} (Alpha)', block)
+        self.assertIn(f"Current development:** rewindDV {ALPHA} ({BASE['development']['release_channel'].capitalize()})", block)
         if BASE['public_release'].get('offline_only', False):
             self.assertIn('offline-only', block); self.assertIn('No DriverKit extension is included', block)
         else:
-            self.assertIn(f"Latest public download:** [Alpha {BASE['public_release']['application_version']} / Driver B{BASE['public_release']['driver_build']}]", block)
+            self.assertIn(f"Latest public download:** [{BASE['public_release']['tag'].split('-')[0].capitalize()} {BASE['public_release']['application_version']} / Driver B{BASE['public_release']['driver_build']}]", block)
 
     def test_offline_distribution_cannot_claim_driver_or_sip_requirement(self):
         data = copy.deepcopy(BASE)

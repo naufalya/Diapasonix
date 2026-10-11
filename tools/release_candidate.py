@@ -203,11 +203,12 @@ def versions_from_settings(root, settings):
         require(re.fullmatch(r"\d+(?:\.\d+)*", v), "Unresolved version setting")
         return v
     require(value(APP_ID, "CURRENT_PROJECT_VERSION") == str(identity["app_build"]) and value(DRIVER_ID, "CURRENT_PROJECT_VERSION") == str(identity["driver_build"]), "Component settings disagree with canonical identity")
-    require(value(APP_ID, "MARKETING_VERSION") == alpha and value(DRIVER_ID, "MARKETING_VERSION") == alpha, "Marketing settings disagree with product identity")
+    require(value(APP_ID, "MARKETING_VERSION") == alpha and value(DRIVER_ID, "MARKETING_VERSION") == identity.get("driver_reuse", identity)["product_version"], "Marketing settings disagree with product identity")
     return {"product_version": alpha, "release_channel": identity["channel"], "application_version": alpha, "app_bundle_build": value(APP_ID, "CURRENT_PROJECT_VERSION"),
             "app_bundle_version": value(APP_ID, "MARKETING_VERSION"),
             "driver_build": value(DRIVER_ID, "CURRENT_PROJECT_VERSION"),
-            "driver_bundle_version": value(DRIVER_ID, "MARKETING_VERSION")}
+            "driver_bundle_version": value(DRIVER_ID, "MARKETING_VERSION"),
+            **({"driver_reuse": identity["driver_reuse"]} if "driver_reuse" in identity else {})}
 
 
 def versions(root, env):
@@ -248,8 +249,13 @@ def bundle_versions(read, v, offline_only=False):
                 "CFBundleVersion": v["app_bundle_build"], "CFBundleShortVersionString": v["app_bundle_version"]}
     require(all(str(app.get(k)) == value for k, value in expected.items()), "Built app version identity mismatch")
     if "product_version" in v:
-        require(v["product_version"] == v["application_version"] == v["app_bundle_version"] == v["driver_bundle_version"], "Canonical version disagreement")
+        require(v["product_version"] == v["application_version"] == v["app_bundle_version"], "Canonical version disagreement")
         require(app.get("RewindDVProductVersion") == v["product_version"] and app.get("RewindDVReleaseChannel") == v["release_channel"], "Canonical app metadata disagreement")
+    if "driver_reuse" in v:
+        require(v["driver_bundle_version"] == v["driver_reuse"]["product_version"], "Retained driver version relabeled")
+        require(app.get("RewindDVRequiredDriverVersion") == v["driver_bundle_version"], "Retained driver version requirement mismatch")
+    elif "product_version" in v:
+        require(v["driver_bundle_version"] == v["product_version"], "New driver version disagreement")
     if offline_only:
         require(app.get("RewindDVOfflineOnly") is True, "Offline package must enforce offline runtime")
         return

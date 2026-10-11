@@ -10,10 +10,33 @@ import sys
 sys.dont_write_bytecode = True
 import product_identity as p
 
-EXPECTED = {'product_version': '0.1.9', 'channel': 'beta', 'app_build': 199, 'driver_build': 202}
+EXPECTED = {'product_version': '0.1.11', 'channel': 'beta', 'app_build': 201, 'driver_build': 203}
 HISTORY = [{'product_version':'0.1.4', 'app_build':194, 'driver_build':197}]
+BASE = {'product_version':'0.1.9','channel':'beta','app_build':199,'driver_build':202}
 
 class IdentityTests(unittest.TestCase):
+    def reuse(self):
+        return dict(BASE, product_version='0.1.10', app_build=200,
+                    driver_reuse={'product_version':'0.1.9','channel':'beta',
+                                  'source_revision':'a'*40,'bundle_manifest_sha256':'b'*64})
+    def test_reuse_keeps_driver_identity(self):
+        history=[BASE]
+        i=self.reuse()
+        self.assertEqual(p.validate(i,history),i)
+        generated=p.generated(i)
+        self.assertIn('driverVersion = "0.1.9"',generated[Path('Foundation/Sources/RewindDVMonitorCore/ProductIdentity.swift')])
+        self.assertIn('REWINDDV_PRODUCT_VERSION_STRING "0.1.9"',generated[p.CONFIG/'ProductIdentity.hpp'])
+        for key,value in [('driver_build',201),('driver_build',203),('app_build',199),('product_version','0.1.9')]:
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):p.validate(dict(i,**{key:value}),history)
+        for key,value in [('product_version','0.1.8'),('channel','alpha'),('source_revision','bad'),('bundle_manifest_sha256','bad')]:
+            bad=copy.deepcopy(i);bad['driver_reuse'][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):p.validate(bad,history)
+    def test_successive_reuse_preserves_binding(self):
+        prior=self.reuse();i=dict(prior,product_version='0.1.11',app_build=201)
+        p.validate(i,[BASE,prior])
+        for key,value in [('source_revision','c'*40),('bundle_manifest_sha256','d'*64)]:
+            bad=copy.deepcopy(i);bad['driver_reuse'][key]=value
+            with self.subTest(key=key),self.assertRaises(ValueError):p.validate(bad,[BASE,prior])
     def test_forward_numeric(self):
         self.assertLess(p.version('0.0.96'), p.version('0.1.1'))
         self.assertLess(p.version('0.1.0'), p.version('0.1.1'))
@@ -29,7 +52,7 @@ class IdentityTests(unittest.TestCase):
             i = dict(EXPECTED, **{key:value})
             with self.subTest(key=key), self.assertRaises(ValueError): p.validate(i, HISTORY)
     def test_components_not_interchanged(self):
-        self.assertEqual(p.validate(EXPECTED,HISTORY),EXPECTED)
+        self.assertEqual(p.validate(BASE,HISTORY),BASE)
         with self.assertRaises(ValueError): p.validate(dict(EXPECTED,app_build=198,driver_build=195),HISTORY)
     def test_current_source(self): self.assertEqual(p.check(),EXPECTED)
     def test_same_identity_changed_bytes(self):
@@ -44,19 +67,23 @@ class IdentityTests(unittest.TestCase):
     def bundle(self, root):
         app = root/'RewindDV.app'; driver=app/'Contents/Library/SystemExtensions/net.rewinddigital.RewindDV.Driver.dext'
         driver.mkdir(parents=True); (app/'Contents/MacOS').mkdir()
-        a={'CFBundleIdentifier':'net.rewinddigital.RewindDV','CFBundleShortVersionString':'0.1.9','CFBundleVersion':'199','RewindDVAlphaVersion':'0.1.9','RewindDVProductVersion':'0.1.9','RewindDVReleaseChannel':'beta','RewindDVRequiredDriverBuild':'202'}
-        d={'CFBundleIdentifier':'net.rewinddigital.RewindDV.Driver','CFBundleShortVersionString':'0.1.9','CFBundleVersion':'202','IOKitPersonalities':{'RewindDVFoundationController':{'FoundationBuildNumber':'202'}}}
+        a={'CFBundleIdentifier':'net.rewinddigital.RewindDV','CFBundleShortVersionString':'0.1.11','CFBundleVersion':'201','RewindDVAlphaVersion':'0.1.11','RewindDVProductVersion':'0.1.11','RewindDVReleaseChannel':'beta','RewindDVRequiredDriverBuild':'203','RewindDVRequiredDriverVersion':'0.1.11'}
+        d={'CFBundleIdentifier':'net.rewinddigital.RewindDV.Driver','CFBundleShortVersionString':'0.1.11','CFBundleVersion':'203','IOKitPersonalities':{'RewindDVFoundationController':{'FoundationBuildNumber':'203'}}}
         (app/'Contents/Info.plist').write_bytes(plistlib.dumps(a));(driver/'Info.plist').write_bytes(plistlib.dumps(d))
         (app/'Contents/MacOS/RewindDV').write_bytes(b'app fixture');(driver/'net.rewinddigital.RewindDV.Driver').write_bytes(b'driver fixture')
         return app,a
     def test_actual_bundle_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
-            app,a=self.bundle(Path(tmp));result=p.bundle_identity(app,EXPECTED)
-            self.assertEqual(result['package_name'],'rewindDV-beta-0.1.9-App199-Driver202.zip')
+            import driver_reuse
+            app,a=self.bundle(Path(tmp));identity=copy.deepcopy(EXPECTED)
+            driver=app/'Contents/Library/SystemExtensions/net.rewinddigital.RewindDV.Driver.dext'
+            identity.pop('driver_reuse',None)
+            result=p.bundle_identity(app,identity)
+            self.assertEqual(result['package_name'],'rewindDV-beta-0.1.11-App201-Driver203.zip')
             for key,bad in [('RewindDVRequiredDriverBuild','194'),('CFBundleShortVersionString','0.1.0'),('CFBundleVersion','195'),('RewindDVReleaseChannel','alpha')]:
                 with self.subTest(key=key):
                     (app/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(a,**{key:bad})))
-                    with self.assertRaises(ValueError): p.bundle_identity(app,EXPECTED)
+                    with self.assertRaises(ValueError): p.bundle_identity(app,identity)
     def test_generated_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/p.CONFIG).mkdir(parents=True)

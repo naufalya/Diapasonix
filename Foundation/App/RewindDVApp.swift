@@ -694,7 +694,7 @@ final class SystemExtensionInstaller: NSObject, ObservableObject,
       DriverBuildRequirement.bundled?.permitsReplacement(
         existingBuild: existing.bundleVersion, existingVersion: existing.bundleShortVersion,
         incomingBuild: ext.bundleVersion, incomingVersion: ext.bundleShortVersion,
-        productVersion: ProductIdentity.version) == true
+        productVersion: ProductIdentity.driverVersion) == true
     else { return .cancel }
     return .replace
   }

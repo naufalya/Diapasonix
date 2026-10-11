@@ -33,6 +33,9 @@ def main():
     parser.add_argument("--team-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    from product_identity import check
+    if 'driver_reuse' in check(REPO):
+        parser.error('Retained driver identity: use build-app-only.py; full-component rebuild prohibited')
     if not re.fullmatch(r"[A-Z0-9]{10}", args.team_id):
         parser.error("Expected a ten-character Apple team identifier")
     out = args.output.resolve()

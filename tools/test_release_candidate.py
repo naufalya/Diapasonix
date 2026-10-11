@@ -409,15 +409,15 @@ class PreparationTests(unittest.TestCase):
 
     def test_build_settings_derive_versions_and_check_duplicate_consistency(self):
         root = Path(__file__).resolve().parents[1]
-        app = {"PRODUCT_BUNDLE_IDENTIFIER": r.APP_ID, "CURRENT_PROJECT_VERSION": "191", "MARKETING_VERSION": "0.1.1"}
-        driver = {"PRODUCT_BUNDLE_IDENTIFIER": r.DRIVER_ID, "CURRENT_PROJECT_VERSION": "194", "MARKETING_VERSION": "0.1.1"}
+        app = {"PRODUCT_BUNDLE_IDENTIFIER": r.APP_ID, "CURRENT_PROJECT_VERSION": "201", "MARKETING_VERSION": "0.1.11"}
+        driver = {"PRODUCT_BUNDLE_IDENTIFIER": r.DRIVER_ID, "CURRENT_PROJECT_VERSION": "203", "MARKETING_VERSION": "0.1.11"}
         settings = [{"buildSettings": b} for b in [app, driver, driver.copy()]]
-        expected = {"product_version":"0.1.1", "release_channel":"alpha", "application_version":"0.1.1", "app_bundle_build":"191", "driver_build":"194", "app_bundle_version":"0.1.1", "driver_bundle_version":"0.1.1"}
+        expected = {"product_version":"0.1.11", "release_channel":"beta", "application_version":"0.1.11", "app_bundle_build":"201", "driver_build":"203", "app_bundle_version":"0.1.11", "driver_bundle_version":"0.1.11"}
         self.assertEqual(r.versions_from_settings(root, settings), expected)
         for field, value in [("CURRENT_PROJECT_VERSION", "193"), ("MARKETING_VERSION", "0.1.0")]:
             bad = copy.deepcopy(settings); bad[-1]["buildSettings"][field] = value
             with self.assertRaises(r.GateError): r.versions_from_settings(root, bad)
-        with self.assertRaises(r.GateError): r.release_identity(expected, "beta", "beta-0.1.1")
+        with self.assertRaises(r.GateError): r.release_identity(expected, "alpha", "alpha-0.1.11")
 
     def test_canonical_bundle_metadata_and_registry_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:

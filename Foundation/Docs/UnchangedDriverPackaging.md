@@ -23,10 +23,23 @@ Before delivering an app-only candidate:
   pending macOS replacement requests remain a separate installation condition;
   never cancel them with forced removal or reset procedures.
 
-The current identity generator and Developer ID archive workflow still enforce
-full-component identities, and `Tools/package-app-only.py` remains retired. The
-reuse workflow must be implemented and validated before the next app-only binary
-delivery. Do not work around that limitation by advancing an unchanged driver,
-disabling validation, reusing an app identity for changed bytes, or reviving the
-historical packager unchanged. This policy update itself delivers no binary and
-changes no reserved identities or installed components.
+`ProductIdentity.json` may reserve an app-only successor with a `driver_reuse`
+binding to the retained driver's original version, channel, reviewed source and
+full signed-bundle manifest digest. The app/product advance; the driver build
+must equal the latest prior reservation. Repeated app-only updates retain the
+same source and manifest binding. Signed host metadata carries the required
+driver version independently of the host version.
+
+Use `Tools/build-app-only.py` with the retained DEXT, its source/manifest receipt,
+the app distribution profile, certificate and team. It verifies unchanged driver
+implementation, build contract and entitlements; derives a temporary host-only
+project by removing the driver dependency and embed phase; builds the host;
+copies the pinned driver; and signs only the outer app. Preserve the projection
+and command receipts. The normal full-component archive rejects reuse identities,
+as does the driver target's identity check.
+
+The historical `Tools/package-app-only.py` remains retired. Do not advance an
+unchanged driver, disable validation, reuse an app identity for changed bytes, or
+relabel the retained driver. Verify the final notarized ZIP extraction against
+the pinned driver manifest before release. Package validation and recorded UI
+checks do not imply new physical capture qualification.

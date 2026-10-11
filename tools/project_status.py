@@ -29,7 +29,7 @@ def validate_identities(status, alpha, driver, app_build=None):
         check(re.fullmatch(r'\d+\.\d+\.\d+', identity['application_version']), 'Invalid alpha version')
         check(type(identity['driver_build']) is int and identity['driver_build'] > 0, 'Invalid driver build')
         check(re.fullmatch(r'[0-9a-f]{40}', identity['source_revision']), 'Full public source revision required')
-    check(status['development'].get('release_channel') == 'alpha', 'Development channel must remain alpha')
+    check(status['development'].get('release_channel') in ('alpha','beta'), 'Invalid development channel')
     check(status['development']['application_version'] == alpha, 'Development alpha disagrees with source')
     check(status['development']['driver_build'] == driver, 'Development driver disagrees with source')
     if app_build is not None:
@@ -43,7 +43,7 @@ def validate_identities(status, alpha, driver, app_build=None):
               'Invalid full Developer ID distribution flags')
     if r.get('offline_only', False):
         check(r.get('driver_included') is False and r.get('requires_sip_disabled') is False, 'Offline package must exclude driver and SIP requirement')
-    check(r['tag'] == 'alpha-' + r['application_version'], 'Release tag disagrees with application version')
+    check(r['tag'] in ('alpha-' + r['application_version'], 'beta-' + r['application_version']), 'Release tag disagrees with application version')
     check(re.fullmatch(r'[0-9a-f]{64}', r['package_sha256']), 'Exact released package hash required')
     check(status['links']['source'] == 'https://github.com/' + release.REPOSITORY, 'Wrong canonical project')
     check(status['links']['release'] == status['links']['source'] + '/releases/tag/' + r['tag'], 'Wrong release link')
@@ -65,22 +65,24 @@ def source_app_build(root):
 
 def status_block(status):
     d, r = status['development'], status['public_release']
+    development_channel = d['release_channel'].capitalize()
+    download_channel = r['tag'].split('-')[0].capitalize()
     if r.get('signing') == 'developer-id':
-        download = (f"**Latest public download:** [Alpha {r['application_version']} / Driver B{r['driver_build']}]"
+        download = (f"**Latest public download:** [{download_channel} {r['application_version']} / Driver B{r['driver_build']}]"
                     f"({status['links']['release']}) — engineering prerelease, Developer ID-signed and notarized. "
                     f"App build {r['application_build']} includes the matching driver. Use normal macOS approval; no SIP change is required. "
                     "Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.\n\n")
     elif r.get('offline_only', False):
-        download = (f"**Latest public download:** [Alpha {r['application_version']} offline-only / app build {r['application_build']}]"
+        download = (f"**Latest public download:** [{download_channel} {r['application_version']} offline-only / app build {r['application_build']}]"
                     f"({status['links']['release']}) — engineering prerelease, ad-hoc signed and not notarized. "
                     "No DriverKit extension is included; driver activation, deck control and physical acquisition are disabled. "
                     "Offline operations require no SIP change.\n\n")
     else:
-        download = (f"**Latest public download:** [Alpha {r['application_version']} / Driver B{r['driver_build']}]"
+        download = (f"**Latest public download:** [{download_channel} {r['application_version']} / Driver B{r['driver_build']}]"
                     f"({status['links']['release']}) — engineering prerelease, ad-hoc signed and not notarized. "
                     "Driver installation requires disabling SIP, which reduces macOS security. Offline playback, Surgery and inspection require no driver activation.\n\n")
     return (START + "\n"
-            f"**Current development:** rewindDV {d['application_version']} (Alpha). "
+            f"**Current development:** rewindDV {d['application_version']} ({development_channel}). "
             f"App build {d['application_build']}; driver build {d['driver_build']}. [Reviewed public source]({status['links']['source']}/tree/{d['source_revision']}).\n\n"
             + download + "Development source and downloads have separate identities and qualification. "
             "Application versions and driver builds advance independently. "

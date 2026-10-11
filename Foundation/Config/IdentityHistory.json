@@ -62,6 +62,26 @@
       "app_build": 198,
       "driver_build": 201,
       "meaning": "Signed/notarized App198/Driver201 UI beta installed; Driver201 activation registered while200 remained attached. Metadata/layout changes accepted. User observed square Dock icon caused by raw runtime image override; superseded without altering this delivered artifact."
+    },
+    {
+      "product_version": "0.1.9",
+      "channel": "beta",
+      "app_build": 199,
+      "driver_build": 202,
+      "meaning": "Signed/notarized App199/Driver202 retained unchanged. Actual202 identity and handshake verified; Sony idle stability observed. Superseded host-only public packaging will retain exact signed Driver202."
+    },
+    {
+      "product_version": "0.1.10",
+      "channel": "beta",
+      "app_build": 200,
+      "driver_build": 202,
+      "driver_reuse": {
+        "product_version": "0.1.9",
+        "channel": "beta",
+        "source_revision": "ab976378f035c6cfc4195f96da142104be0bae8d",
+        "bundle_manifest_sha256": "ff34d5fd4346a7412524e931817bd2f417c6b0b39478b05f86a4bb0f6dc92670"
+      },
+      "meaning": "Reserved host-only Beta successor; no distributed binary. RetainedDriver202 publication blocked by private lineage strings; reservation preserved, successor requires newly redacted Driver203."
     }
   ]
 }

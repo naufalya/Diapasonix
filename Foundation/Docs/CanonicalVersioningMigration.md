@@ -43,9 +43,11 @@ high-water values were marketing0.1.0, App190 and Driver193; no proposed identit
 reservation was found in that inventory. IdentityHistory.json retains these
 prior high-water records. Future reservations must append the old current
 identity, check external usage, and allocate monotonic unused counters explicitly.
-Changed circulated artifacts cannot reuse a component build. Current packaging
-requires fresh full app/DEXT components; the obsolete generic same-build app-only
-splicing command is retired. Historical build-pinned scripts remain historical.
+Changed circulated artifacts cannot reuse a component build. The migration's
+original full-component rule was superseded by
+[exact unchanged-driver reuse](UnchangedDriverPackaging.md) for app-only updates.
+The obsolete generic same-build splicing command remains retired. Historical
+build-pinned scripts remain historical.
 
 ## Replacement and preservation
 

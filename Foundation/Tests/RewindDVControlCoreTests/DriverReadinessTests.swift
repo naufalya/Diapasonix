@@ -313,7 +313,7 @@ private func handshakeRoute(_ changedOffset: Int? = nil) throws -> FoundationRou
   let bridge = try String(contentsOf: root.appendingPathComponent("App/DriverBridge.swift"), encoding: .utf8)
   #expect(model.contains("existingBuild: existing.bundleVersion, existingVersion: existing.bundleShortVersion"))
   #expect(model.contains("incomingBuild: ext.bundleVersion, incomingVersion: ext.bundleShortVersion"))
-  #expect(model.contains("productVersion: ProductIdentity.version) == true"))
+  #expect(model.contains("productVersion: ProductIdentity.driverVersion) == true"))
   #expect(model.contains("DriverBuildRequirement.bundled != nil"))
   #expect(!model.contains("ext.bundleVersion == \"188\""))
   #expect(bridge.contains("guard let requiredBuildNumber = Self.requiredBuildNumber else"))

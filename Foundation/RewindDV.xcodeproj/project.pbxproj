@@ -6109,7 +6109,7 @@
       "name" = "Check Driver Product Identity";
       "runOnlyForDeploymentPostprocessing" = "0";
       "shellPath" = "/bin/zsh";
-      "shellScript" = "/usr/bin/python3 -B \"$SRCROOT/Tools/product_identity.py\" --check";
+      "shellScript" = "/usr/bin/python3 -B \"$SRCROOT/Tools/product_identity.py\" --check --driver-build";
     };
     "F01800000000000000000001" = {
       "isa" = "PBXShellScriptBuildPhase";
