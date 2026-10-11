@@ -1,20 +1,10 @@
 # Full signed release workflow
 
-Current development is rewindDV 0.1.1 (Alpha), App191 / Driver194.
-`Foundation/Config/ProductIdentity.json` is the single product/channel/component
-authority; generated settings and the AlphaVersion compatibility alias are checked
-with `python3 -B Foundation/Tools/product_identity.py --check`. New numeric product
-versions also supply both freshly built bundles’ macOS short versions. Component
-builds remain independent. This migration publishes source only; the available
-Alpha0.0.96 / App190 / Driver193 binary and its historical identities are unchanged.
+Current development is rewindDV 0.1.12 (Beta), App202 / Driver203. `Foundation/Config/ProductIdentity.json` is the product/channel/component authority. App and driver counters advance independently. An unchanged signed driver must be reused with its original version metadata, public source provenance and full bundle manifest; do not rebuild or re-sign it merely for an app update.
 
+Driver203 was built and signed from clean public source `1e9688fb882ea0b249f36fb1c8500a9789a0c3ff` (Beta 0.1.11). Its publication-only compiled change removes private lineage metadata; capture/recovery algorithms are unchanged. Final Beta 0.1.12 builds App202 from its exact reviewed public commit and reuses Driver203 byte for byte. The explicit driver-reuse identity pins that original source and bundle-manifest digest. The host requires Driver203 and its original 0.1.11 driver version.
 
-Build the exact clean reviewed public-source commit using the manual archive
-workflow in [DeveloperIDSigning](Foundation/Docs/DeveloperIDSigning.md). Compile
-and Developer ID-sign the normal CLI separately with hardened runtime and a secure
-timestamp. Stage the newly built full app/embedded matching driver, CLI and notices.
-Submit the complete stage to Apple, retain Accepted results, staple the app and
-repeat native signature, profile, PCI, Gatekeeper and distribution assessments.
+Use `Foundation/Tools/build-app-only.py` for retained-driver builds. Source-input and driver-contract gates reject changed driver implementation, entitlements or build graph. It builds only the host and signs only its outer bundle. A new driver uses the full archive workflow in [DeveloperIDSigning](Foundation/Docs/DeveloperIDSigning.md). Compile and Developer ID-sign the normal CLI separately with hardened runtime and a secure timestamp. Stage the full app, driver, CLI and notices, submit the complete stage to Apple, staple only the outer app, and repeat signatures, profiles, PCI, Gatekeeper and distribution assessments. Recheck the full retained-driver manifest after notarization and extraction.
 
 Use `tools/release_candidate.py ingest-signed` with an external hash-bound private
 distribution receipt. Its `provenance` schema2 records explicit full/signing flags,
@@ -89,7 +79,9 @@ Every future release follows this chain:
 
 The source must already be an ancestor of canonical public `main`. A tag must
 peel to that exact full commit, including for annotated tags. The commit must
-contain and build the application and driver at their normal source paths.
+contain the application and driver at their normal source paths. A reused driver
+additionally binds its exact earlier reviewed public build source and signed
+full-bundle manifest; final host source must pass the unchanged-input gates.
 Documentation-only hub snapshots, unrelated roots/merges, private ancestry and
 packages built from a different commit fail the gates. A documentation change on
 a complete source tree does not change which committed tree is actually built.

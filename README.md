@@ -20,7 +20,7 @@ application and driver source, engineering downloads, documentation, issues and
 contributions. Visit [rewinddv.com](https://rewinddv.com) for the project website.
 
 <!-- project-status:start -->
-**Current development:** rewindDV 0.1.1 (Alpha). App build 191; driver build 194. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/abb0fbc9947f965f3a08fd8a95227211beff2b84).
+**Current development:** rewindDV 0.1.12 (Beta). App build 202; driver build 203. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/2ed7245de91358331156a316e5652ad14ed7fcfa).
 
 **Latest public download:** [Alpha 0.0.96 / Driver B193](https://github.com/rewinddv/rewindDV/releases/tag/alpha-0.0.96) — engineering prerelease, Developer ID-signed and notarized. App build 190 includes the matching driver. Use normal macOS approval; no SIP change is required. Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.
 
@@ -29,12 +29,14 @@ Development source and downloads have separate identities and qualification. App
 
 ## Current cumulative engineering source
 
-The cumulative source includes the integrated IEC pack classifier, interpretation provenance and epoch-aware mixed NTSC/PAL archive model. Software inventory covers all 256 pack IDs and 274 layout variants, including reserved, unassigned and opaque cases; this is not complete semantic support or IEC certification. Raw pack bytes, conflicting observations and unknown regions remain preserved. VAUX 0x61 fixed-bit interpretation remains unresolved.
+The current Beta source includes the accepted reconnection and app-readiness fixes, bounded evidence retention, held-timecode classification, capture startup/tail classification and source-bound viewing ranges. Captured source bytes and damage evidence remain preserved; playback does not repair the tape. The cassette icon, preferred 16:9 initial window, inspector navigation and Beta naming are integrated.
 
-Source-bound epochs carry physical ordinals, byte extents and rational cadence through acquisition maps, metadata reports, review ranges and filmstrip/contact-sheet consumers. Lossless reviewed-range exports split at recording-system boundaries and preserve ordered source bytes. Mixed-system single-file merge and film/container output reject with a segmented-export alternative. HDV uses a separate representation and gains no physical qualification from DV archive tests.
+The capture and playback inspectors show every observed pack using a classifier/catalog covering 256 allocations and 274 layout variants, with decoded labels, field validity, interpretation provenance, references and raw bytes. Inventory coverage includes reserved, unassigned and opaque entries; it is not a claim of complete semantic decoding or IEC certification. Mixed NTSC/PAL recording epochs and lossless segmented exports preserve source ordering and unknown regions. HDV remains separately represented and physically unqualified.
 
-The source retains receive ownership/lifecycle and storage safeguards, the manual Developer ID archive pipeline, and the M1 preview inspector layout correction. Source tests and native offline archive/playback checks have separate receipts from final artifact verification. Physical PAL/HDV capture, full-tape endurance, broader device compatibility and the new package’s app-driver negotiation remain unqualified. The release provenance identifies the exact public-source build; earlier M1 observations do not qualify a rebuilt driver.
+Successful PAL captures and a completed whole-tape workflow are documented below with their actual earlier builds. Later Driver199 reconnect/capture and Driver200 reread checks, plus Driver202 idle stability, have separate bounded evidence. The current public package has its own software, signing and distribution validation; these earlier results do not establish a fresh physical test of Driver203.
 
+
+Successful physical PAL DV captures and a verified whole-tape NTSC workflow are recorded in [compatibility evidence](COMPATIBILITY.md#successful-pal-and-whole-tape-captures). The results include approximately 52 minutes of PAL-dominant DV and 112,412 NTSC frames (about 62½ minutes) in a completed whole-tape job. Tested builds, continuity warnings and inferred tape-boundary limits are preserved there.
 
 ## Download and install
 

@@ -1,7 +1,7 @@
 # Bounded compatibility evidence
 
 <!-- project-status:start -->
-**Current development:** rewindDV 0.1.1 (Alpha). App build 191; driver build 194. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/abb0fbc9947f965f3a08fd8a95227211beff2b84).
+**Current development:** rewindDV 0.1.12 (Beta). App build 202; driver build 203. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/2ed7245de91358331156a316e5652ad14ed7fcfa).
 
 **Latest public download:** [Alpha 0.0.96 / Driver B193](https://github.com/rewinddv/rewindDV/releases/tag/alpha-0.0.96) — engineering prerelease, Developer ID-signed and notarized. App build 190 includes the matching driver. Use normal macOS approval; no SIP change is required. Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.
 
@@ -10,12 +10,30 @@ Development source and downloads have separate identities and qualification. App
 
 ## Current cumulative engineering source
 
-The cumulative source includes the integrated IEC pack classifier, interpretation provenance and epoch-aware mixed NTSC/PAL archive model. Software inventory covers all 256 pack IDs and 274 layout variants, including reserved, unassigned and opaque cases; this is not complete semantic support or IEC certification. Raw pack bytes, conflicting observations and unknown regions remain preserved. VAUX 0x61 fixed-bit interpretation remains unresolved.
+The current Beta source includes the accepted reconnection and app-readiness fixes, bounded evidence retention, held-timecode classification, capture startup/tail classification and source-bound viewing ranges. Captured source bytes and damage evidence remain preserved; playback does not repair the tape. The cassette icon, preferred 16:9 initial window, inspector navigation and Beta naming are integrated.
 
-Source-bound epochs carry physical ordinals, byte extents and rational cadence through acquisition maps, metadata reports, review ranges and filmstrip/contact-sheet consumers. Lossless reviewed-range exports split at recording-system boundaries and preserve ordered source bytes. Mixed-system single-file merge and film/container output reject with a segmented-export alternative. HDV uses a separate representation and gains no physical qualification from DV archive tests.
+The capture and playback inspectors show every observed pack using a classifier/catalog covering 256 allocations and 274 layout variants, with decoded labels, field validity, interpretation provenance, references and raw bytes. Inventory coverage includes reserved, unassigned and opaque entries; it is not a claim of complete semantic decoding or IEC certification. Mixed NTSC/PAL recording epochs and lossless segmented exports preserve source ordering and unknown regions. HDV remains separately represented and physically unqualified.
 
-The source retains receive ownership/lifecycle and storage safeguards, the manual Developer ID archive pipeline, and the M1 preview inspector layout correction. Source tests and native offline archive/playback checks have separate receipts from final artifact verification. Physical PAL/HDV capture, full-tape endurance, broader device compatibility and the new package’s app-driver negotiation remain unqualified. The release provenance identifies the exact public-source build; earlier M1 observations do not qualify a rebuilt driver.
+Successful PAL captures and a completed whole-tape workflow are documented below with their actual earlier builds. Later Driver199 reconnect/capture and Driver200 reread checks, plus Driver202 idle stability, have separate bounded evidence. The current public package has its own software, signing and distribution validation; these earlier results do not establish a fresh physical test of Driver203.
 
+
+## Successful PAL and whole-tape captures
+
+**EMPIRICAL_EVIDENCE — retained capture verification and job records, reviewed 2026-10-11.** These successful physical acquisition results on the Sony HVR-M15U apply to the named earlier builds.
+
+| Workflow | Tested build | Saved result | Verification |
+| --- | --- | --- | --- |
+| PAL-dominant DV capture | Alpha 0.0.77 / Driver183 | 78,581 PAL frames within 78,635 total frames; approximately 52:25 of mixed-system DV | Saved-byte integrity, final acknowledgement and native DV reread passed; operator stopped the job |
+| Automated whole-tape NTSC DV capture | Alpha 0.0.81 / Driver183 | 112,412 complete frames; approximately 62:30.8 of media | Observed stop, receive drain, saved-byte verification, native reread and final acknowledgement passed |
+| Additional PAL DV capture | Alpha 0.0.87 / Driver188 | 11,761 PAL frames, approximately 7:50 of PAL media | Receive closed and saved-data verification passed; operator canceled the job |
+
+The whole-tape job completed rewind, inferred start, capture, observed stop, inferred end, drain and verification. Boundaries came from observed transport behavior; absolute physical tape-end coverage was not independently established. The PAL records establish successful PAL capture, rather than completed whole-tape PAL coverage.
+
+The longer PAL and whole-tape records each retain three CIP/DBC discontinuities after empty packets and one terminal partial frame. Known packet drops, host-ring drops and raw transport-gap counters were zero. These counters and matching saved-byte hashes do not establish pristine audiovisual content or unknown hardware continuity. This audit inspected retained records; it did not rehash or view the original media anew.
+
+## Later bounded reconnection and startup checks
+
+Driver199 completed three controlled stopped-deck reconnects followed by a bounded NTSC capture, with app readiness recovering rather than staying locked out. Driver200's analysis established that the earlier distortion was already present in received DV bytes. The controlled reread was clean and did not trigger damaged-frame exclusion; startup instability versus intermittent tape-read damage remains unresolved. Exclusion behavior was verified offline on the original recording. Driver202's observed idle session remained stable for about 30 minutes without a reset storm or app lockout. These are bounded results, not permanent-lockout stress coverage, active-capture unplug testing, live unload qualification or a fresh physical test of Driver203.
 
 ## Bounded M1 SIP-on observation
 

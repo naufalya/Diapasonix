@@ -1,10 +1,8 @@
 # Known limitations
 
-The cumulative source includes the integrated IEC pack classifier, interpretation provenance and epoch-aware mixed NTSC/PAL archive model. Software inventory covers all 256 pack IDs and 274 layout variants, including reserved, unassigned and opaque cases; this is not complete semantic support or IEC certification. Raw pack bytes, conflicting observations and unknown regions remain preserved. VAUX 0x61 fixed-bit interpretation remains unresolved.
+PAL capture and a whole-tape NTSC workflow have succeeded on the Sony HVR-M15U; see [measured results and builds](COMPATIBILITY.md#successful-pal-and-whole-tape-captures). Broader PAL/deck coverage, a completed whole-tape PAL matrix, HDV acquisition/playback, active-capture disconnect, permanent-lockout stress, live extension unload and absolute tape-end proof remain open. Current Driver203 has software and distribution validation, with no fresh physical capture in this publication pass.
 
-Source-bound epochs carry physical ordinals, byte extents and rational cadence through acquisition maps, metadata reports, review ranges and filmstrip/contact-sheet consumers. Lossless reviewed-range exports split at recording-system boundaries and preserve ordered source bytes. Mixed-system single-file merge and film/container output reject with a segmented-export alternative. HDV uses a separate representation and gains no physical qualification from DV archive tests.
-
-The source retains receive ownership/lifecycle and storage safeguards, the manual Developer ID archive pipeline, and the M1 preview inspector layout correction. Source tests and native offline archive/playback checks have separate receipts from final artifact verification. Physical PAL/HDV capture, full-tape endurance, broader device compatibility and the new package’s app-driver negotiation remain unqualified. The release provenance identifies the exact public-source build; earlier M1 observations do not qualify a rebuilt driver.
+The current Beta includes accepted recovery, held-timecode, capture startup/tail classification and UI fixes. Original captured bytes and damage evidence remain preserved. Inspectors show every observed pack using a classifier/catalog covering 256 pack IDs and 274 layout variants; inventory coverage is not complete semantic decoding or IEC certification.
 
 The previously installed M1 App189 Open DV chooser was not visible over Screen Sharing. Direct local comparison was unavailable; its cause remains unresolved. The combined app’s local chooser check passed, but M1 saved-file interaction and physical live-preview retesting remain open.
 
@@ -12,14 +10,17 @@ CLI/MCP external path grants are session-scoped. Physical recovery and driver ac
 
 See [current development and latest public download](README.md) for independent
 lifecycle identities. Current bounded development evidence is summarized in
-[COMPATIBILITY](COMPATIBILITY.md). The earlier B183 evidence below remains
-historical; neither establishes full-tape endurance nor qualifies the downloadable
-artifact.
+[COMPATIBILITY](COMPATIBILITY.md). The earlier B183 evidence includes the successful PAL and whole-tape results
+listed in compatibility; it does not qualify the current downloadable artifact.
 
 Normal capture STOP has bounded positive receive-retirement evidence in earlier
 B190 development. Live DriverKit extension disable/unload, hot replacement and
 reboot-free removal remain unqualified. Follow the shutdown/restart maintenance
 procedure; never use global extension disable as a capture-session STOP.
+
+## Historical Alpha 0.0.77 observations
+
+The following retained observations describe earlier bounded tests. Their open PAL and full-tape scope was subsequently extended by the successful records listed above; they do not qualify the current public artifact.
 
 Startup/reset behavior, earlier device disappearance, full-tape endurance,
 provider-loss during capture, sleep/wake and physical PAL/HDV capture remain open

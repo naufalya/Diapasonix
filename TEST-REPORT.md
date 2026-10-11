@@ -1,4 +1,12 @@
-# Current development validation
+# Beta 0.1.12 validation
+
+Reviewed public source passes 562 Swift Testing cases (127 control, 98 monitor, 337 archive) and 14 XCTest cases. Release tooling passes 44 regressions, status tooling 14, signed-distribution tooling 13, identity tooling 12 and retained-driver tooling three. These are software tests, separate from physical acquisition.
+
+The native public-source Driver203 archive passed Developer ID signature, profile, architecture and PCI authorization checks. Final App202 host-only compilation passed and copied signed Driver203 without rebuilding or re-signing it. Its full bundle manifest matched before and after copy and outer-app signing. Driver203 retains its original 0.1.11 short version while App202 is 0.1.12. Failed preliminary project-path attempts were retained locally and produced no delivered candidate.
+
+Published release provenance records final hashes, accepted notarization and native distribution assessments. This publication pass performs no new physical deck operation. [Compatibility](COMPATIBILITY.md) records successful earlier PAL captures and a completed whole-tape NTSC job, plus later bounded reconnect/capture/reread and idle-stability observations.
+
+# Historical Alpha 0.0.93 public validation
 
 Alpha 0.0.93 / app188 / Driver B190 public source passes 273 Swift Testing
 cases, 14 XCTest cases, native app/driver/CLI Release builds, 38 release-tool

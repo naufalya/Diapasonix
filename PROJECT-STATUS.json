@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "development": {
-    "application_version": "0.1.1",
-    "driver_build": 194,
-    "source_revision": "abb0fbc9947f965f3a08fd8a95227211beff2b84",
-    "state": "Reviewed canonical version migration and terminal/receive safety source. Unsigned engineering candidate only; no new downloadable binary. Latest download remains Alpha0.0.96 / App190 / Driver193.",
-    "updated_utc": "2026-10-09T18:55:50.509443+00:00",
-    "application_build": 191,
-    "release_channel": "alpha"
+    "application_version": "0.1.12",
+    "driver_build": 203,
+    "source_revision": "2ed7245de91358331156a316e5652ad14ed7fcfa",
+    "state": "Accepted runtime fixes integrated. Public-source App202 reuses exact signed public-source Driver203; Beta distribution is in publication validation.",
+    "updated_utc": "2026-10-11T19:24:05.336069+00:00",
+    "application_build": 202,
+    "release_channel": "beta"
   },
   "public_release": {
     "application_version": "0.0.96",
@@ -28,30 +28,30 @@
     "notarization_submission": "528960d0-09c3-4869-80f9-172c8573e424"
   },
   "qualification": {
-    "public_summary": "Development0.1.1 unifies product/channel and independent App191/Driver194 identity. Preserves terminal Stop fencing, bounded receive Stop retry and permanent quarantine. Software/offline validation is separate from the unchanged signed Alpha0.0.96 download and its historical qualification. No new hardware qualification or live-unload claim.",
-    "architecture": "Development app and CLI arm64; Driver194 arm64e. Existing downloadable Driver193 remains arm64e. Intel unsupported.",
+    "public_summary": "Successful earlier PAL captures and a completed whole-tape NTSC workflow on Sony HVR-M15U, with preserved warnings and inferred boundaries. Current Beta includes accepted recovery/capture/UI fixes. Software/distribution checks are separate from physical evidence.",
+    "architecture": "App202 and CLI arm64; retained Driver203 arm64e. Intel unsupported.",
     "macos_deployment_floor": "26.0",
     "bounded_runtime_macos": [
       "27.0.1",
       "26.6.2"
     ],
-    "hardware_scope": "Earlier bounded Sony HVR-M15U NTSC observations only. M1 App188/Driver192 capture used macOS26.6.2 with SIP enabled and developer-mode state unknown; no current Driver193 hardware matrix.",
-    "pal_capture": "not physically qualified",
+    "hardware_scope": "Sony HVR-M15U: historical PAL and NTSC whole-tape workflows; later Driver199 reconnects/bounded capture, Driver200 reread, Driver202 about30minute stable idle. No fresh Driver203 physical capture qualification.",
+    "pal_capture": "Successful Alpha0.0.77/Driver183 capture:78581PALframes, about52minutes; Alpha0.0.87/Driver188 additional11761PALframes. Saved-data verification passed; operator-stopped, not completed whole-tape PAL coverage.",
     "hdv_capture": "not physically qualified",
-    "dv_playback": "Native offline opening, continuity, scrubbing and mixed-format archive checks passed. Final signed app local chooser/play/pause/first-last-frame and inspector smoke passed. Continuous displayed-pixel association and M1 final-package playback remain unqualified.",
+    "dv_playback": "Native offline opening, continuity, scrubbing and mixed-format archive checks passed. Earlier public App190 chooser/play/pause/first-last-frame and inspector smoke passed. New App202 exact-package runtime scope is separate; continuous displayed-pixel association and M1 final-package playback remain unqualified.",
     "hdv_playback": "not qualified",
-    "full_tape_endurance": "not qualified for Driver193 or this exact public package",
-    "distribution": "Full Developer ID-signed and notarized app, matching embedded Driver193 and normal CLI. Approved PCI match0x590111C1. Stapled ticket, restored signatures, Gatekeeper and distribution policy pass. Normal macOS approval; no SIP change required. Signing is not broad hardware certification.",
-    "capture": "No physical acquisition qualification for Driver193. Earlier M1 App188/Driver192 captured452 complete NTSC DV frames over15.0817seconds; capture preview stutter was reported while saved playback appeared smooth. Source-quality and developer-mode state remain unknown.",
+    "full_tape_endurance": "Successful Alpha0.0.81/Driver183 NTSC whole-tape workflow:112412frames, about62:30.8media; observed stop, drain, saved-data verification and native reread passed. Boundaries inferred; continuity/terminal partial-data warnings retained. Not a new Driver203 endurance test.",
+    "distribution": "Latest published Alpha0.0.96/App190/Driver193: Developer ID signed and notarized, stapled ticket, Gatekeeper and distribution policy passed. Beta0.1.12 replacement remains in validation until assets are published.",
+    "capture": "Physical PAL and NTSC whole-tape successes scoped above. Later bounded NTSC capture/reconnect/reread results retained. No physical deck operation during this public release pass.",
     "hot_unload": "unqualified; use shutdown/restart-based replacement or removal; successful live extension disable is not a prerequisite for normal capture STOP",
-    "startup": "Exact restored final app launches locally on macOS27.0.1 with explicit no-driver automation arguments. Driver activation/negotiation and fresh-system installation not exercised.",
+    "startup": "Public-source host build passed; exact new package installation, activation and app-driver negotiation not freshly exercised.",
     "automation": "Normal66 CLI/MCP tools; same-user app socket and session-scoped sandbox grants. Physical hardware commands remain unqualified.",
-    "iec_metadata": "256 allocations and274 layouts inventoried; software classification and raw preservation tested; complete IEC certification not claimed; VAUX0x61 interpretation unresolved",
+    "iec_metadata": "Inspectors show every observed pack, using a classifier/catalog covering256allocations and274layouts, with field validity, raw bytes and interpretation provenance. Inventory coverage is not complete semantic decoding or IEC certification.",
     "mixed_archive": "Source-bound recording epochs and ordered lossless segmented exports validated offline; unknown regions preserved; mixed-system single-file merge and film/container output reject explicitly; HDV remains separate",
-    "signed_app_ui": "Final restored App190: chooser cancel/reopen, read-only saved-DV play/pause, first/last-frame identity and inspector scrolling passed locally. No broad rendered-frame or M1 runtime claim.",
+    "signed_app_ui": "Earlier App199/Driver202 UI/icon/metadata/saved-DV checks retained. New public App202 native build passed; release validation describes exact-package runtime scope.",
     "historical_b190_startup": "stable final generation before capture; no reset observed during these bounded captures; broader startup/reset coverage remains open",
     "m1_preview": "App189 inspector layout correction and bounded paced offline replay passed on the earlier M1 setup. Physical live-preview retest outstanding. App189 chooser visibility over Screen Sharing unresolved; MacBook Air unavailable for local comparison. Neither result qualifies rebuilt App190/Driver193.",
-    "development": "App191/Driver194: unsigned engineering build and software/offline regression scope only. No signing, notarization, installation, activation or physical capture in this migration."
+    "development": "Beta0.1.12/App202 uses exact retained public-source Driver203(0.1.11); source-input, build-contract and full-manifest gates passed."
   },
   "links": {
     "source": "https://github.com/rewinddv/rewindDV",

@@ -1,7 +1,15 @@
 # Development and releases
 
+## Beta 0.1.12 — App202 / retained Driver203
+
+This Beta integrates accepted app lockout/reconnection fixes, capture startup/tail classification, preserved-source viewing ranges, held-timecode and metadata inspection improvements, bounded evidence retention, the restored cassette icon, preferred 16:9 initial window and Beta naming. All accepted runtime work is included in reviewed public source.
+
+Driver203 removes private lineage metadata from the public binary without changing capture/recovery algorithms. App202 reuses that exact signed public-source driver; its original driver short version remains 0.1.11. Future app-only builds have an explicit source-contract and full-bundle reuse gate.
+
+Successful PAL capture and whole-tape NTSC capture are documented with measured results and actual earlier builds in [COMPATIBILITY.md](COMPATIBILITY.md#successful-pal-and-whole-tape-captures). These historical results are separate from physical qualification of Driver203. Exact source, signing, notarization and ZIP identities are in release provenance.
+
 <!-- project-status:start -->
-**Current development:** rewindDV 0.1.1 (Alpha). App build 191; driver build 194. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/abb0fbc9947f965f3a08fd8a95227211beff2b84).
+**Current development:** rewindDV 0.1.12 (Beta). App build 202; driver build 203. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/2ed7245de91358331156a316e5652ad14ed7fcfa).
 
 **Latest public download:** [Alpha 0.0.96 / Driver B193](https://github.com/rewinddv/rewindDV/releases/tag/alpha-0.0.96) — engineering prerelease, Developer ID-signed and notarized. App build 190 includes the matching driver. Use normal macOS approval; no SIP change is required. Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.
 
