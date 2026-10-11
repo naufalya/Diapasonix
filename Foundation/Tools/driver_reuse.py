@@ -151,4 +151,15 @@ def app_only_project(project):
     root = objects[objects[data['rootObject']]['mainGroup']]
     root['path'] = str(project.resolve().parent.parent)
     root['sourceTree'] = '<absolute>'
+    source_root = project.resolve().parent.parent
+    config_ids = {o['baseConfigurationReference'] for o in objects.values()
+                  if o.get('isa') == 'XCBuildConfiguration' and 'baseConfigurationReference' in o}
+    for ref_id, obj in objects.items():
+        if (ref_id in config_ids or obj.get('isa') == 'PBXFileSystemSynchronizedRootGroup'
+            or (obj.get('isa') == 'PBXFileReference' and obj.get('sourceTree') == 'SOURCE_ROOT')):
+            path = obj.get('path')
+            if not path or Path(path).is_absolute():
+                raise ValueError('Unexpected source path in app-only projection')
+            obj['path'] = str((source_root / path).resolve())
+            obj['sourceTree'] = '<absolute>'
     return data
