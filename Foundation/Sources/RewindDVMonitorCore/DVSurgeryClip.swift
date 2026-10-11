@@ -25,18 +25,28 @@ public struct DVSurgeryClip: Sendable {
     var hash = SHA256(), detector = SurgeryMetadataDetector()
     var starts: [(Int, String, String, Bool)] = []
     var previousFormat: String?
-    let timeline = try DVPlaybackTimeline.read(url: url) { data, ordinal, offset in
-      let metadata = try SurgeryMetadataDetector.observe(data)
+    var pending: (metadata: SurgeryMetadataDetector.Observation, ordinal: Int)?
+    // One observation of lookahead places a held-timecode boundary at the
+    // first frame of the run, without retaining or changing its media bytes.
+    func append(_ metadata: SurgeryMetadataDetector.Observation, ordinal: Int,
+                next: SurgeryMetadataDetector.Observation?) throws {
       let changed = previousFormat != metadata.format
-      let reasons = detector.consume(metadata, reset: changed)
+      let reasons = detector.consume(metadata, reset: changed, next: next)
       if ordinal == 0 || changed || !reasons.isEmpty {
         guard starts.count < 100_000 else { throw DVPlaybackTimeline.Failure(reason: "Too many segment boundaries to review safely.") }
-        starts.append((ordinal, metadata.format, ordinal == 0 ? "Start of clip" : changed ? "Format change" : reasons.joined(separator: " · "), changed))
+        let prefix = ordinal == 0 ? ["Start of clip"] : changed ? ["Format change"] : []
+        starts.append((ordinal, metadata.format, (prefix + reasons).joined(separator: " · "), changed))
       }
       previousFormat = metadata.format
+    }
+    let timeline = try DVPlaybackTimeline.read(url: url) { data, ordinal, offset in
+      let metadata = try SurgeryMetadataDetector.observe(data)
+      if let prior = pending { try append(prior.metadata, ordinal: prior.ordinal, next: metadata) }
+      pending = (metadata, ordinal)
       hash.update(data: data)
       if ordinal % 128 == 0 { progress(Double(offset) / max(1, size)) }
     }
+    if let pending { try append(pending.metadata, ordinal: pending.ordinal, next: nil) }
     progress(1)
     return Self(timeline: timeline, sha256: hash.finalize().map { String(format: "%02x", $0) }.joined(),
       segments: starts.enumerated().map { i, item in
@@ -100,12 +110,35 @@ public struct DVSurgeryClip: Sendable {
 /// (OPEN_SOURCE_CONSENSUS; github.com/rewinddv/dv-cut/blob/main/REFERENCES.md).
 /// Invalid/conflicting repeats never win a vote; AAUX halves stay separate.
 struct SurgeryMetadataDetector {
-  struct Observation { let format: String; let fields: [String: Int] }
+  struct Observation {
+    let format: String
+    let fields: [String: Int]
+    struct Timecode: Equatable { let value: Int; let day: Int }
+    var timecode: Timecode? {
+      guard let value = fields["Subcode/19/tc"], let day = fields["tcDay"] else { return nil }
+      return Timecode(value: value, day: day)
+    }
+    func repeatsTimecode(of other: Observation?) -> Bool {
+      guard let other, format == other.format, let timecode else { return false }
+      return timecode == other.timecode
+    }
+  }
   var previous: Observation?
+  var previousTimecodeHeld = false
   var asserted = Set<String>()
-  mutating func consume(_ current: Observation, reset: Bool) -> [String] {
-    if reset { previous = nil; asserted.removeAll() }
+  mutating func consume(_ current: Observation, reset: Bool, next: Observation? = nil) -> [String] {
+    if reset { previous = nil; previousTimecodeHeld = false; asserted.removeAll() }
     var reasons = Set<String>()
+    // Repeated source numbering is an observation, not proof of blank footage,
+    // a stopped deck, duplicate pictures or capture loss. Group the whole run;
+    // genuine jumps and independent recording markers still create boundaries.
+    let held = current.repeatsTimecode(of: previous) || current.repeatsTimecode(of: next)
+    if held && (!previousTimecodeHeld || !current.repeatsTimecode(of: previous)) {
+      reasons.insert("Repeated timecode")
+    }
+    if previousTimecodeHeld && !held, current.timecode != nil, previous?.timecode != nil {
+      reasons.insert("Timecode changes again")
+    }
     for (key, value) in current.fields {
       if key.hasSuffix("/start") {
         if value == 0 { if !asserted.contains(key), previous != nil { reasons.insert("Recording start") }; asserted.insert(key) }
@@ -116,9 +149,10 @@ struct SurgeryMetadataDetector {
       if key.hasSuffix("/date"), old != value { reasons.insert("Recorded date changed") }
       if key.hasSuffix("/clock"), value != old, value != (old + 1) % 86400 { reasons.insert("Recorded clock jump") }
       if key.hasSuffix("/tc"), let day = current.fields["tcDay"],
-        previous?.fields["tcDay"] != day || value != (old + 1) % day { reasons.insert("Timecode discontinuity") }
+        previous?.fields["tcDay"] != day || (value != old && value != (old + 1) % day) { reasons.insert("Timecode discontinuity") }
     }
     previous = current
+    previousTimecodeHeld = held
     return reasons.sorted()
   }
   static func observe(_ data: Data) throws -> Observation {

@@ -17,6 +17,7 @@ enum class QuiesceReason : uint8_t {
     kProviderRevoked,
     kStartFailure,
     kWakeRebuild,
+    kBusResetRecovery,
 };
 
 // A private resource-unwind ledger. This is deliberately not a lifecycle

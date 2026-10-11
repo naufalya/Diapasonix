@@ -43,6 +43,7 @@ for suite in BufferRingDMATests ARStreamProcessorTests ARStreamFuzzTests; do
     ASFWDriver/Async/Rx/ARPacketParser.cpp ASFWDriver/Common/BarrierUtils.cpp
 done
 run_suite InterruptEventSequencerTests tests/core/InterruptEventSequencerTests.cpp
+run_suite ResetRecoveryFenceTests tests/async/ResetRecoveryFenceTests.cpp
 run_suite BusResetCoordinatorTests tests/core/BusResetCoordinatorTests.cpp \
   ASFWDriver/Bus/GenerationTracker.cpp ASFWDriver/Async/Track/LabelAllocator.cpp \
   ASFWDriver/Bus/BusResetCoordinator.cpp \

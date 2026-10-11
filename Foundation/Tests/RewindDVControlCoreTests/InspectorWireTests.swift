@@ -231,6 +231,55 @@ private func inspectorResultFixture() throws -> Data {
   }
 }
 
+// Shape of the completed pre-binding STATUS rejection observed during the
+// Sony reconnection regression. Identity values are synthetic; no tape data.
+private func unboundInspectorFailureFixture() throws -> Data {
+  let route = try inspectorRoute()
+  var data = Data(count: InspectorResult.wireBytes)
+  for (offset, value) in [(0, UInt32(1)), (4, 1284), (116, 5), (120, 0x21),
+    (128, 0xe00002ca), (136, 4)] { write(value, offset, &data) }
+  for (offset, value) in [(8, UInt64(1)), (16, 2), (24, 3), (32, route.guid),
+    (40, route.driverInstanceID), (80, 100), (104, 101)] { write(value, offset, &data) }
+  write(UInt16.max, 148, &data)
+  data.replaceSubrange(188..<192, with: InspectorQuery.tapeTransportState.frame)
+  return data
+}
+
+@Test func completedInspectorRejectionBeforeRouteBindingIsFailureNotUncertainty() throws {
+  let route = try inspectorRoute()
+  let result = try InspectorResult(data: unboundInspectorFailureFixture(), requestID: 1,
+    operationID: 2, attemptID: 3, route: route, query: .tapeTransportState)
+  #expect(result.status == Int32(bitPattern: 0xe00002ca))
+  #expect(result.events.isEmpty)
+  #expect(try result.interpretation(for: .tapeTransportState) == nil)
+}
+
+@Test func unboundInspectorFailureRejectsUncorrelatedOrPossiblyTransmittedEvidence() throws {
+  let route = try inspectorRoute()
+  let fixture = try unboundInspectorFailureFixture()
+  func parse(_ bytes: Data) throws -> InspectorResult {
+    try InspectorResult(data: bytes, requestID: 1, operationID: 2, attemptID: 3,
+      route: route, query: .tapeTransportState)
+  }
+  for offset in [0,4,8,16,24,32,40,48,56,64,72,88,96,112,116,124,132,136,
+                 140,144,148,150,151,152,156,160,177,178,188,192,196,1283] {
+    var bad = fixture; bad[offset] ^= 1
+    #expect(throws: ControlWireError.self) { try parse(bad) }
+  }
+  for stages: UInt32 in [0, 1, 0x20, 0x23, 0x25, 0x29, 0x31, 0x61, 0xa1] {
+    var bad = fixture; write(stages, 120, &bad)
+    #expect(throws: ControlWireError.self) { try parse(bad) }
+  }
+  for status: UInt32 in [0, 0xe00002d8] { // success and still-not-ready are not failures
+    var bad = fixture; write(status, 128, &bad)
+    #expect(throws: ControlWireError.self) { try parse(bad) }
+  }
+  for (admitted, completed): (UInt64, UInt64) in [(0, 101), (100, 0), (100, 99)] {
+    var bad = fixture; write(admitted, 80, &bad); write(completed, 104, &bad)
+    #expect(throws: ControlWireError.self) { try parse(bad) }
+  }
+}
+
 @Test func inventoryIsStatusOnlyAndExactlyBounded() {
   let queries: [InspectorQuery] = [.unitInfo, .unitPlugInfo] + (0...7).map { .subunitInfo(page: $0) }
   #expect(queries.allSatisfy { $0.frame.count == 8 && $0.frame[0] == 1 && $0.frame[1] == 0xff })

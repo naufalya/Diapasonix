@@ -1,11 +1,13 @@
 # Canonical product identity migration
 
-The next development candidate is **rewindDV 0.1.1 (Alpha)**, app build191 and
+The canonical version migration reserved **rewindDV 0.1.1 (Alpha)**, app build191 and
 driver build194. This unifies the historical Alpha0.0.96 and macOS marketing0.1.0
 series. It is an engineering identity reservation, not a downloadable release or
 production-readiness claim. The published alpha-0.0.96 / App190 / Driver193 ZIP
 and its SHA-256 `3d470dcc90eae1b3893dce6e8df6accf8b80860121faf4088fe902dec8c604f8`
 remain unchanged.
+
+The following source successor reserves **0.1.2 (Alpha), App192 / Driver195** for verified transport-log archival and explicit observation recovery. The signed 0.1.1 candidate and its activation/UI receipts remain historical evidence; physical capture qualification stopped at an exhausted passive-evidence budget. The new source identity is not a published download or a hardware qualification. Current values remain in `Config/ProductIdentity.json`; the prior reservation is preserved in `IdentityHistory.json`.
 
 ## Authority and consumers
 
@@ -18,7 +20,7 @@ Both native targets check before compiling/processing metadata, with declared
 sandbox inputs and a derived host plist output. SwiftPM and standalone CLI
 compilations consume the same generated Swift identity.
 
-| Identity | Historical published package | New development source |
+| Identity | Historical published package | Migration candidate |
 | --- | --- | --- |
 | Product | Alpha 0.0.96 | 0.1.1 (Alpha) |
 | App macOS short version | 0.1.0 | 0.1.1 |

@@ -271,7 +271,8 @@ bool ExecuteRuntimeTeardown(ASFWDriver& service, ServiceContext& ctx, const Quie
         ctx.nativeDrain->Quarantined() || ctx.receiveQuarantined.load(std::memory_order_acquire))
         return false;
 
-    ctx.statusPublisher.BindListener(nullptr);
+    if (plan.reason != QuiesceReason::kBusResetRecovery)
+        ctx.statusPublisher.BindListener(nullptr);
     ctx.statusPublisher.Publish(ctx.controller.get(), ctx.deps.asyncController.get(),
                                 SharedStatusReason::Disconnect);
 
@@ -287,12 +288,19 @@ bool ExecuteRuntimeTeardown(ASFWDriver& service, ServiceContext& ctx, const Quie
     // Shutdown and Stop above can themselves cancel an issued request and
     // create wire uncertainty. Check only after those producers are terminal;
     // a fresh allocator after suspend/rebuild would otherwise erase the fence.
-    // Neither a local soft reset nor a new Self-ID proves remote FCP retirement.
+    // Neither a local soft reset nor a new Self-ID ALONE proves both remote
+    // and local retirement. A recovery receipt requires the combined proof.
     if (ctx.deps.asyncSubsystem && ctx.deps.asyncSubsystem->HasUncertainWire()) {
-        QuarantineRuntime(service, ctx, kIOReturnNotReady);
-        ASFW_LOG_ERROR(Controller,
-                       "[Lifecycle] ASYNC_WIRE_QUARANTINED; preserving runtime; automatic rebuild forbidden");
-        return false;
+        if (!ctx.deps.hardware ||
+            !ctx.deps.asyncSubsystem->RetireResetWire(*ctx.deps.hardware, *ctx.nativeDrain)) {
+            QuarantineRuntime(service, ctx, kIOReturnNotReady);
+            ASFW_LOG_ERROR(Controller,
+                           "[Lifecycle] ASYNC_WIRE_QUARANTINED; combined remote-reset/local-FIFO proof unavailable; preserving runtime");
+            return false;
+        }
+        ASFW_LOG(Controller,
+                 "[ResetRecovery] remote reset generation=%u, native callbacks terminal, DMA/CommandPtr retired, controller FIFO flush complete; old runtime releasable, commandsReplayed=0",
+                 ctx.deps.asyncSubsystem->ResetRecoveryGeneration());
     }
     const bool hardwareGone = ctx.deps.hardware && ctx.deps.hardware->HardwareGone();
     // Surprise removal skips all final register cleanup. The teardown calls
@@ -329,8 +337,9 @@ void ReleaseQuiescedRuntime(ServiceContext& ctx, const QuiescePlan& plan) {
     const auto finalState = ctx.lifecycle->CurrentState();
     // The native continuation runs on Default after the start/stop callback has
     // returned, so even failed-start resources have no live bring-up stack.
-    ctx.Reset(finalState == ControllerState::kSuspended ? ServiceContext::ResetMode::ForSuspend
-                                                         : ServiceContext::ResetMode::Full);
+    ctx.Reset(finalState != ControllerState::kSuspended ? ServiceContext::ResetMode::Full :
+        (plan.reason == QuiesceReason::kBusResetRecovery ? ServiceContext::ResetMode::ForRecovery
+                                                       : ServiceContext::ResetMode::ForSuspend));
 }
 } // namespace
 
@@ -761,7 +770,8 @@ void ASFWDriver::BeginNativeRuntimeDrain() {
     });
 
     const bool suspend = ctx.nativeDrainPlan->reason == QuiesceReason::kSystemSuspend ||
-                         ctx.nativeDrainPlan->reason == QuiesceReason::kWakeRebuild;
+                         ctx.nativeDrainPlan->reason == QuiesceReason::kWakeRebuild ||
+                         ctx.nativeDrainPlan->reason == QuiesceReason::kBusResetRecovery;
     ctx.BeginProviderNativeRetirement(drain);
     ctx.watchdog.BeginNativeRetirement(drain);
     if (ctx.deps.sbp2SessionScheduler) ctx.deps.sbp2SessionScheduler->BeginNativeRetirement(drain);
@@ -796,7 +806,8 @@ void ASFWDriver::CompleteNativeRuntimeDrain() {
 
     auto plan = *ctx.nativeDrainPlan;
     const bool wasSuspend = plan.reason == QuiesceReason::kSystemSuspend ||
-                            plan.reason == QuiesceReason::kWakeRebuild;
+                            plan.reason == QuiesceReason::kWakeRebuild ||
+                            plan.reason == QuiesceReason::kBusResetRecovery;
     const bool revoked = ctx.lifecycle && ctx.lifecycle->CurrentState() == ControllerState::kRevoked;
     if (wasSuspend && (ivars->stopPending || revoked)) {
         // The first wave only disabled IRQ registration. Termination/revocation
@@ -838,8 +849,9 @@ void ASFWDriver::CompleteNativeRuntimeDrain() {
     const bool powerPending = ivars->powerAcknowledgementPending;
     const uint32_t powerFlags = ivars->pendingPowerFlags;
     ivars->powerAcknowledgementPending = false;
-    const bool resume = (powerPending && (powerFlags & kIOServicePowerCapabilityOn)) ||
-                        ivars->wakeRebuildPending;
+    // A sleep received during recovery wins over the automatic restart.
+    const bool resume = powerPending ? (powerFlags & kIOServicePowerCapabilityOn) != 0 :
+        (ivars->wakeRebuildPending || plan.reason == QuiesceReason::kBusResetRecovery);
     const uint64_t verifyAttempt = ivars->wakeRebuildPending ? ivars->wakeVerifyAttempt : 1;
     ivars->wakeRebuildPending = false;
     if (resume && ctx.lifecycle && ctx.lifecycle->CurrentState() == ControllerState::kSuspended &&
@@ -1312,6 +1324,20 @@ void ASFWDriver::AsyncWatchdogTimerFired_Impl(ASFWDriver_AsyncWatchdogTimerFired
             ctx.watchdog.HandleTick(ctx.controller.get(), ctx.deps.asyncController.get(),
                                     receiveOwner.get(), ctx.isoch.TransmitContext(),
                                     ctx.statusPublisher);
+            if (ctx.deps.asyncSubsystem && ctx.deps.asyncSubsystem->ResetRecoveryPending()) {
+                const uint64_t nowUsec = ASFW::Timing::hostTicksToNanos(mach_absolute_time()) / 1000;
+                const uint64_t accepted = ctx.deps.asyncSubsystem->ResetRecoveryAcceptedUsec();
+                // Quiet time only reduces rebuilds during a reset storm. The
+                // release proof never relies on this delay or on a timeout.
+                if (nowUsec >= accepted && nowUsec - accepted >= 250'000 &&
+                    ctx.resetRecoveryBudget.Admit(nowUsec)) {
+                    ASFW_LOG(Controller,
+                        "[ResetRecovery] rebuilding after accepted bus reset generation=%u; no capture resume or command replay",
+                        ctx.deps.asyncSubsystem->ResetRecoveryGeneration());
+                    RequestRuntimeQuiesce(static_cast<uint32_t>(QuiesceReason::kBusResetRecovery));
+                    return; // native drain owns shutdown; do not rearm this timer
+                }
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 {
-  "product_version": "0.1.1",
-  "channel": "alpha",
-  "app_build": 191,
-  "driver_build": 194
+  "product_version": "0.1.9",
+  "channel": "beta",
+  "app_build": 199,
+  "driver_build": 202
 }

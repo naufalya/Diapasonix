@@ -16,12 +16,20 @@ private struct TechnicalSpecificationRows: View {
   let coverage: String
   var metadata: DVPackSemanticReport? = nil
   var metadataOrdinalIsEstimated = false
+  @State private var showingPacks = false
+  @State private var packQuery = ""
   var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Picker("Inspector view", selection: $showingPacks) {
+        Text("Overview").tag(false)
+        Text("Metadata & packs").tag(true)
+      }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("inspector-view")
     ScrollView(.vertical) {
       // A live sample can contain hundreds of pack/field rows. Keep offscreen
       // evidence out of the capture window's layout pass; it remains available
       // when the operator scrolls to it. Raw preservation never consults this UI.
       LazyVStack(alignment: .leading, spacing: 16) {
+        if !showingPacks {
         ForEach(DVMetadataPresentation.summarySections(sections)) { section in
           VStack(alignment: .leading, spacing: 9) {
             Text(section.title).font(.headline)
@@ -41,10 +49,15 @@ private struct TechnicalSpecificationRows: View {
           }
           Divider()
         }
-        if let metadata { DVMetadataInspector(report: metadata, ordinalIsEstimated: metadataOrdinalIsEstimated) }
+        } else if let metadata {
+          DVMetadataInspector(report: metadata, ordinalIsEstimated: metadataOrdinalIsEstimated, searchQuery: $packQuery)
+        } else {
+          Text("No complete DV frame sampled yet. Metadata will appear here when a frame is available.").font(.callout)
+        }
         Text(coverage).font(.caption).foregroundStyle(.secondary)
       }.frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 5)
-    }.frame(height: 510)
+    }.frame(height: 360)
+    }
   }
 }
 
@@ -119,7 +132,7 @@ private struct PlaybackTechnicalSpecificationsPanel: View {
         // observation. Reserve its full height so seeks cannot move the file
         // facts, Inspector card, or Reviewed export below the monitor row.
         Text(metadata.presentationStatus).font(.caption)
-          .lineLimit(4).frame(height: 80, alignment: .topLeading)
+          .lineLimit(4).frame(height: 64, alignment: .topLeading)
           .accessibilityLabel(metadata.presentationStatus)
           .accessibilityIdentifier("playback-metadata-position")
       }
@@ -387,18 +400,22 @@ struct UnifiedMonitorWorkspace: View {
         if source == .surgery {
           SurgeryView(model: surgery, playbackURL: playback.sourceURL)
         } else {
-        // Identical reserved height in both modules; options never move the
-        // preview or meters when toggled, and sidebar expansion is independent.
-        viewingControls.frame(width: 720, height: 82, alignment: .topLeading).zIndex(2)
-        HStack(alignment: .top, spacing: 18) {
-          monitor.frame(width: 720)
+        viewingControls.frame(height: 82, alignment: .topLeading).zIndex(2)
+        let available = max(716, workspaceWidth - 44)
+        if available >= 1_060 {
+          let inspectorWidth = min(360, max(300, available * 0.27))
           HStack(alignment: .top, spacing: 18) {
+            monitor(width: available - 214 - inspectorWidth - 36)
             meters.frame(width: 214)
-            // A permanent peer of Audio levels in both modules. Keep the
-            // section's own info-circle heading; no duplicate disclosure row.
-            inspector.frame(width: 240)
+            inspector.frame(width: inspectorWidth)
               .accessibilityIdentifier("workspace-inspector")
           }
+        } else {
+          HStack(alignment: .top, spacing: 18) {
+            monitor(width: available - 232)
+            meters.frame(width: 214)
+          }
+          inspector.accessibilityIdentifier("workspace-inspector")
         }
         if source == .deck {
           CollapsibleWorkspaceSection(title: "Ingest and verification", identifier: "ingest-details") {
@@ -419,7 +436,7 @@ struct UnifiedMonitorWorkspace: View {
         .font(.caption).foregroundStyle(.secondary)
         }
       }
-      .frame(width: max(source == .surgery ? 720 : 1210, workspaceWidth - 44), alignment: .leading)
+      .frame(width: max(716, workspaceWidth - 44), alignment: .leading)
       .padding(.horizontal, 22).padding(.top, 4).padding(.bottom, 22)
       .fixedSize(horizontal: false, vertical: true)
       // A short Capture page and a taller Playback page share one origin.
@@ -561,7 +578,7 @@ struct UnifiedMonitorWorkspace: View {
     }
   }
 
-  private var monitor: some View {
+  private func monitor(width: CGFloat) -> some View {
     VStack(spacing: 12) {
       ZStack {
         RoundedRectangle(cornerRadius: 12).fill(.black)
@@ -609,7 +626,7 @@ struct UnifiedMonitorWorkspace: View {
         if source == .file && playback.isLoading { ProgressView().controlSize(.large).tint(.white) }
       }
       // A source-system change affects decoded pixels, never the playback layout.
-      .frame(width: 720, height: source == .file ? 576 : (liveRasterHeight == 576 ? 576 : 480))
+      .frame(width: width, height: width * 9 / 16)
       .clipShape(RoundedRectangle(cornerRadius: 12))
       .contentShape(Rectangle())
       .onTapGesture {
@@ -626,9 +643,15 @@ struct UnifiedMonitorWorkspace: View {
         playback.open(url: url)
         return true
       }
-      HStack(spacing: 22) {
-        transport.frame(width: 345)
-        if source == .file { playbackTimeDisplay } else { timeDisplay }
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 22) {
+          transport.frame(width: 345)
+          if source == .file { playbackTimeDisplay } else { timeDisplay }
+        }
+        VStack(spacing: 10) {
+          transport.frame(width: 345)
+          if source == .file { playbackTimeDisplay } else { timeDisplay }
+        }
       }.frame(maxWidth: .infinity, alignment: .center)
       if source == .deck {
         captureActions
@@ -676,6 +699,9 @@ struct UnifiedMonitorWorkspace: View {
               .font(.caption).foregroundStyle(.secondary)
             Text(result.completionContext)
               .font(.caption).foregroundStyle(.secondary)
+            if let message = live.captureClipMessage {
+              Text(message).font(.callout).accessibilityIdentifier("capture-clip-finalization")
+            }
             if let captureURL = live.verifiedCaptureURL {
               Button("Open in Playback", systemImage: "play.rectangle.fill") {
                 openVerifiedCapture(captureURL)

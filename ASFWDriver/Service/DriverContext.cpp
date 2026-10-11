@@ -117,14 +117,22 @@ void ServiceContext::Reset(ResetMode mode) {
         return;
     }
     if (deps.avcDiscovery) deps.avcDiscovery->Shutdown();
-    if (deps.asyncSubsystem && deps.asyncSubsystem->HasUncertainWire()) {
+    if (deps.asyncSubsystem && deps.asyncSubsystem->HasUncertainWire() &&
+        !deps.asyncSubsystem->RetiredResetWire()) {
         receiveQuarantined.store(true, std::memory_order_release);
         ASFW_LOG_ERROR(Controller, "[Lifecycle] remote response retirement unproved; preserving runtime graph");
         return;
     }
+#ifdef REWINDDV_FOUNDATION
+    if (foundationReceive.RetireRuntimeBindings() != kIOReturnSuccess) {
+        receiveQuarantined.store(true, std::memory_order_release);
+        ASFW_LOG_ERROR(Controller, "[Lifecycle] terminal receive bindings not retired; preserving runtime");
+        return;
+    }
+#endif
     // Runtime stopping is owned by RuntimeLifecycleCoordinator. Reset only
     // releases resources after its quiesce executor has stopped them.
-    if (mode == ResetMode::Full && sbp2NubPublisher) {
+    if (mode != ResetMode::ForSuspend && sbp2NubPublisher) {
         sbp2NubPublisher->Shutdown();
         sbp2NubPublisher.reset();
     }
@@ -194,8 +202,8 @@ void ServiceContext::Reset(ResetMode mode) {
     deps.sbp2AddressSpaceManager.reset();
     deps.asyncController.reset();
     deps.asyncSubsystem.reset(); // Stop and cleanup asyncSubsystem
-    if (mode == ResetMode::Full) {
-        // A new provider incarnation must rediscover remote hardware. Retaining
+    if (mode != ResetMode::ForSuspend) {
+        // A new provider incarnation or proved recovery must rediscover remote hardware. Retaining
         // old FWDevice/FWUnit objects here would let a new SBP-2 nub publisher
         // adopt a stale unit before a fresh ROM scan establishes its route.
         deps.deviceManager.reset();
@@ -203,7 +211,9 @@ void ServiceContext::Reset(ResetMode mode) {
     }
     deps.busResetStartedCallback = {};
     deps.cycleInconsistentCallback = {};
-    statusPublisher.Reset();
+    // Existing user clients keep the same service and shared-memory mapping.
+    // Publish disconnect/reconnect through that mapping during recovery.
+    if (mode != ResetMode::ForRecovery) statusPublisher.Reset();
     watchdog.Reset();
     interruptStall = {};
     interruptProbeTimeNs = 0;

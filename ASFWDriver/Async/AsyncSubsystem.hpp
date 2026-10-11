@@ -31,6 +31,7 @@
 #include "Rx/RxPath.hpp"
 #include "Track/CompletionQueue.hpp"
 #include "Track/Tracking.hpp"
+#include "ResetRecoveryFence.hpp"
 
 namespace ASFW::Driver {
 class HardwareInterface;
@@ -142,6 +143,13 @@ class AsyncSubsystem : public IAsyncControllerPort {
     /// Failure requires retention of the entire service/runtime graph.
     [[nodiscard]] bool Stop();
     [[nodiscard]] bool DMAContextsRetired() const noexcept { return dmaContextsRetired_; }
+    // Default-queue recovery only. No in-place allocator reopening or replay.
+    [[nodiscard]] bool ResetRecoveryPending() const noexcept { return resetRecovery_.Ready(); }
+    [[nodiscard]] uint64_t ResetRecoveryAcceptedUsec() const noexcept { return resetRecoveryAcceptedUsec_; }
+    [[nodiscard]] uint32_t ResetRecoveryGeneration() const noexcept { return resetRecovery_.Generation(); }
+    [[nodiscard]] bool RetiredResetWire() const noexcept { return resetRecovery_.Retired(); }
+    [[nodiscard]] bool RetireResetWire(Driver::HardwareInterface& hardware,
+                                      const Shared::NativeCallbackDrain& callbacks);
     // Local DMA retirement cannot establish that a remote response is absent.
     // Root teardown must preserve this allocator when the wire is uncertain.
     [[nodiscard]] bool HasUncertainWire() const {
@@ -325,6 +333,9 @@ class AsyncSubsystem : public IAsyncControllerPort {
     ASFWDiagInboundCSRStats inboundCSRStats_{};
     bool isRunning_{false};
     bool dmaContextsRetired_{true};
+    ResetRecoveryFence resetRecovery_;
+    uint64_t resetRecoveryAcceptedUsec_{0};
+    Driver::HardwareInterface* resetRecoveryHardware_{nullptr}; // identity only, retained by root
     bool dmaQuarantined_{false};
 
     std::unique_ptr<ASFW::Async::Engine::ContextManager> contextManager_;

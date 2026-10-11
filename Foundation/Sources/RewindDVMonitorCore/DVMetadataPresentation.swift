@@ -102,9 +102,24 @@ public enum DVMetadataPresentation {
   public static func fieldCaption(_ field: DVPackSemanticReport.Field) -> String {
     var text = "\(field.confidence.label) · \(field.status) · raw \(field.rawValue) (\(String(format: "0x%X", field.rawValue)))"
     if let numeric = field.numeric {
-      text += " · \(numeric.bitWidth) bits · \(numeric.unit) · \(numeric.relation)"
+      text += " · \(numeric.bitWidth) bits · \(numeric.unit) · \(numeric.relation) · \(numeric.rule)"
     }
     return text
+  }
+  public static func matches(_ pack: DVPackSemanticReport.Pack, query: String) -> Bool {
+    let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    return term.isEmpty || ([pack.typeHex, pack.name, pack.status] + pack.fields.flatMap { [$0.id, $0.name, $0.meaning] })
+      .contains { $0.localizedCaseInsensitiveContains(term) }
+  }
+  public static func layoutCaption(_ field: DVIEC61834.LayoutField) -> String {
+    var parts = field.slices.map { "PC\($0.byte)[\($0.shift + $0.width - 1):\($0.shift)]" }
+    parts.append("encoding: " + field.encoding)
+    if let lower = field.rangeLower { parts.append("minimum: \(lower)") }
+    if let upper = field.rangeUpper { parts.append("maximum: \(upper)") }
+    if let sentinel = field.sentinel { parts.append("sentinel: \(sentinel)") }
+    if let fixed = field.fixed { parts.append("fixed: \(fixed)") }
+    if let labels = field.labels { parts += labels.keys.sorted().map { "\($0): \(labels[$0]!)" } }
+    return parts.joined(separator: " · ")
   }
   public static func location(_ value: DVMetadataLocation) -> String {
     "frame \(value.frameOrdinal) · sequence \(value.sequence) · section \(value.section) · DIF block \(value.block) · slot \(value.slot) · frame byte \(value.localByteOffset) · "

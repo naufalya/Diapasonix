@@ -12,6 +12,9 @@ import RewindDVMonitorCore
 struct DVMetadataInspector: View {
   let report: DVPackSemanticReport
   var ordinalIsEstimated = false
+  var searchQuery: Binding<String>? = nil
+  @State private var localQuery = ""
+  private var query: Binding<String> { searchQuery ?? $localQuery }
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(ordinalIsEstimated ? "Selected frame pack metadata" : "Frame pack metadata · frame \(report.frameOrdinal)").font(.headline)
@@ -31,16 +34,25 @@ struct DVMetadataInspector: View {
           }
         }.accessibilityIdentifier("metadata-vaux61-unresolved")
       }
-      ForEach(DVMetadataPresentation.groups(report)) { group in
+      TextField("Find a pack ID, name or field", text: query)
+        .textFieldStyle(.roundedBorder).accessibilityIdentifier("metadata-search")
+      ForEach(DVMetadataPresentation.groups(report).filter { $0.packs.contains { DVMetadataPresentation.matches($0, query: query.wrappedValue) } }) { group in
         VStack(alignment: .leading, spacing: 8) {
           Text(group.title).font(.headline)
-          ForEach(group.packs, id: \.id) { pack in
+          ForEach(group.packs.filter { DVMetadataPresentation.matches($0, query: query.wrappedValue) }, id: \.id) { pack in
             DisclosureGroup(DVMetadataPresentation.packFieldLabel(pack.name, packID: pack.typeHex)) {
               ForEach(pack.fields, id: \.id) { field in fieldRow(field, source: pack.typeHex) }
               packEvidence(pack)
             }.accessibilityIdentifier("metadata-pack-" + pack.id)
           }
         }
+      }
+      if let sequences = report.sequences, !sequences.isEmpty {
+        DisclosureGroup("Text, teletext & line sequences (\(sequences.count))") {
+          ForEach(Array(sequences.enumerated()), id: \.offset) { index, sequence in
+            sequenceEvidence(sequence, index: index)
+          }
+        }.accessibilityIdentifier("metadata-sequences")
       }
       DisclosureGroup("Subcode & Tape Structure · DIF observations") {
         ForEach(report.structuralMetadata ?? []) { item in
@@ -52,6 +64,13 @@ struct DVMetadataInspector: View {
           }
         }
       }.accessibilityIdentifier("metadata-structure")
+      DisclosureGroup("Coverage & interpretation") {
+        Text("Schema \(report.schemaVersion) · interpretation \(report.interpretationVersion.map(String.init) ?? "unknown")")
+        Text("Frame source byte: \(report.frameByteOffset.map(String.init) ?? "unknown")")
+        Text("Absolute source offsets: \(report.absoluteOffsetsKnown.map { $0 ? "known" : "unknown" } ?? "unspecified")")
+        Text("Principal packs not observed in this sampled frame: " + (report.missingPrincipalPacks.isEmpty ? "none" : report.missingPrincipalPacks.joined(separator: ", ")))
+        Text("A pack ID in the catalog does not establish that it was recorded. Unavailable, conflicting and context-dependent meanings remain qualified. MIC data was not acquired.")
+      }.font(.caption).accessibilityIdentifier("metadata-coverage")
       DisclosureGroup("Pack Evidence · every observed pack (\(report.packs.reduce(0) { $0 + $1.observationCount }))") {
         Text("Exact repetitions share a row; every location remains listed. MIC data was not acquired. Missing packs do not prove missing tape content.").font(.caption)
         ForEach(report.packs, id: \.id) { pack in
@@ -84,9 +103,54 @@ struct DVMetadataInspector: View {
       Text(pack.status).font(.caption)
       if let evidence = pack.catalogEvidence { Text(evidence).font(.caption) }
       ForEach(DVMetadataPresentation.rawPayloadFields(pack), id: \.id) { field in fieldRow(field, source: pack.typeHex) }
-      MetadataLocations(locations: pack.locations ?? [])
+      if let layout = pack.normativeLayout, !layout.isEmpty {
+        DisclosureGroup("Documented bit layout (\(layout.count) fields)") {
+          Text("Slices are listed least-significant fragment first. Layout definitions describe the decoder's interpretation; check each field's status and reference.").font(.caption)
+          ForEach(Array(layout.enumerated()), id: \.offset) { _, field in
+            VStack(alignment: .leading, spacing: 3) {
+              Text("[\(pack.typeHex)] — \(field.id)").font(.caption.bold())
+              Text(DVMetadataPresentation.layoutCaption(field)).font(.caption.monospaced())
+              Text(field.reference).font(.caption2).foregroundStyle(.secondary)
+            }.padding(.vertical, 3)
+          }
+        }
+      }
+      if let locations = pack.locations, !locations.isEmpty {
+        MetadataLocations(locations: locations)
+      } else {
+        MetadataEvidenceLines(lines: pack.sourceByteOffsets.map { "Source byte \($0) · legacy offset; detailed location unavailable" })
+      }
     }.textSelection(.enabled)
   }
+  private func sequenceEvidence(_ sequence: DVIECSequences.Sequence, index: Int) -> some View {
+    DisclosureGroup("\(sequence.kind.capitalized) sequence \(index + 1) · \(sequence.status)") {
+      Text("Expected \(sequence.expectedCount) \(sequence.countUnit) · \(sequence.payload.count) payload bytes · \(sequence.observations.count) observed packs").font(.caption)
+      Text(sequence.reference).font(.caption2)
+      if let sets = sequence.characterSets {
+        ForEach(sets.keys.sorted(), id: \.self) { key in
+          Text("Character set \(key): \(String(format: "0x%02X", sets[key]!)) · raw identifier").font(.caption)
+        }
+      }
+      DisclosureGroup("Payload bytes") { MetadataByteEvidence(bytes: sequence.payload) }
+      ForEach(Array((sequence.components ?? []).enumerated()), id: \.offset) { _, component in
+        DisclosureGroup("[\(String(format: "0x%02X", component.header))] — \(component.status)") {
+          Text("Expected samples: \(component.expectedSamples.map(String.init) ?? "unknown") · observed \(component.samples.count)").font(.caption)
+          Text("Unpacked sample values · hexadecimal").font(.caption)
+          MetadataByteEvidence(bytes: component.samples)
+          DisclosureGroup("Padding sample values (\(component.padding.count))") { MetadataByteEvidence(bytes: component.padding) }
+        }
+      }
+      DisclosureGroup("Sequence observations") {
+        MetadataEvidenceLines(lines: sequence.observations.map {
+          $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            + ($0.qualified ? " · qualified · " : " · unqualified · ")
+            + ($0.location.map(DVMetadataPresentation.location) ?? "location unavailable")
+        })
+      }
+      Text("Byte sequences do not prove readable text or intact content. No glyphs or missing context are inferred.").font(.caption)
+    }
+  }
+
 }
 
 /// Bounded text expansion even for a pack repeated throughout a PAL frame.
@@ -106,6 +170,35 @@ private struct MetadataLocations: View {
           Button("Previous locations") { page = max(0, selected - 1) }.disabled(selected == 0)
           Text("\(selected + 1) / \(pages)").font(.caption)
           Button("Next locations") { page = min(pages - 1, selected + 1) }.disabled(selected == pages - 1)
+        }
+      }
+    }
+  }
+}
+
+/// Paging preserves access to every byte without expanding unbounded text.
+private struct MetadataByteEvidence: View {
+  let bytes: [UInt8]
+  var body: some View {
+    MetadataEvidenceLines(lines: stride(from: 0, to: bytes.count, by: 16).map { offset in
+      "\(offset): " + bytes.dropFirst(offset).prefix(16).map { String(format: "%02X", $0) }.joined(separator: " ")
+    })
+  }
+}
+private struct MetadataEvidenceLines: View {
+  let lines: [String]
+  @State private var page = 0
+  var body: some View {
+    let pages = max(1, (lines.count + 19) / 20)
+    let selected = min(page, pages - 1)
+    VStack(alignment: .leading, spacing: 6) {
+      Text(lines.isEmpty ? "None observed" : lines.dropFirst(selected * 20).prefix(20).joined(separator: "\n"))
+        .font(.caption.monospaced()).textSelection(.enabled)
+      if pages > 1 {
+        HStack {
+          Button("Previous") { page = max(0, selected - 1) }.disabled(selected == 0)
+          Text("\(selected + 1) / \(pages)").font(.caption)
+          Button("Next") { page = min(pages - 1, selected + 1) }.disabled(selected == pages - 1)
         }
       }
     }

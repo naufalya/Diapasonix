@@ -7,6 +7,7 @@ reset = source[/void ServiceContext::Reset\(ResetMode mode\) \{(.*?)\n\}/m, 1]
 abort 'ServiceContext::Reset body not found' unless reset
 
 required = [
+  'foundationReceive.RetireRuntimeBindings()',
   'controller->AttachROMScanner(nullptr);',
   'controller->SetFCPResponseRouter(nullptr);',
   'controller->SetAVCDiscovery(nullptr);',

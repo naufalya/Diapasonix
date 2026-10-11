@@ -147,6 +147,7 @@ public:
         // response. Never infer a stale allocation bitmap from Count()==0.
         if (labelAllocator_->HasUncertainWire()) {
             ::IOLockUnlock(lock_);
+            ASFW_LOG_ERROR(Async, "RegisterTx refused: uncertain prior wire response; awaiting proved reset recovery");
             return AsyncHandle{0}; // No proved wire-fence reopening; no automatic reconstruction or replay.
         }
 

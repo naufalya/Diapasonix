@@ -659,6 +659,9 @@ private func withClockIssue(_ source: Data, kind: Int) -> Data {
   #expect(Set(visible.map(\.id)) == Set(report.packs.map(\.id)))
   for header in ["0x72", "0xF0", "0x96"] {
     let pack = try #require(visible.first { $0.typeHex == header })
+    #expect(DVMetadataPresentation.matches(pack, query: header.lowercased()))
+    #expect(DVMetadataPresentation.matches(pack, query: "  "))
+    #expect(!DVMetadataPresentation.matches(pack, query: "no-such-pack-or-field"))
     let raw = DVMetadataPresentation.rawPayloadFields(pack)
     #expect(raw.map(\.rawValue) == [1,2,3,4])
     #expect(raw.allSatisfy { $0.status == "uninterpreted" && $0.confidence == .unknown })
@@ -765,4 +768,19 @@ private func withClockIssue(_ source: Data, kind: Int) -> Data {
   let rows = try #require(report.sections.first { $0.title == "Audio recording details" }?.rows)
   #expect(rows.first { $0.label == "Recording mode — AAUX sequence half 1" }?.value == "Conflicting values — no selection")
   #expect(rows.first { $0.label == "Recording mode — AAUX sequence half 2" }?.value.hasPrefix("Conflicting") == false)
+}
+
+@Test func inspectorPreservesDocumentedLayoutAndConversionRules() throws {
+  let decoded = try #require(DVIEC61834.decode([0x7f, 255, 255, 125, 128]))
+  #expect(!decoded.layout.isEmpty)
+  for field in decoded.layout {
+    let caption = DVMetadataPresentation.layoutCaption(field)
+    #expect(caption.contains(field.encoding))
+    for slice in field.slices { #expect(caption.contains("PC\(slice.byte)[\(slice.shift + slice.width - 1):\(slice.shift)]")) }
+    if let sentinel = field.sentinel { #expect(caption.contains("sentinel: \(sentinel)")) }
+  }
+  let numeric = try #require(decoded.fields.first { $0.numeric != nil })
+  let rule = try #require(numeric.numeric?.rule)
+  #expect(!rule.isEmpty)
+  #expect(DVMetadataPresentation.fieldCaption(numeric).contains(rule))
 }

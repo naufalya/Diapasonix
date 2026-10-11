@@ -4,6 +4,7 @@ import Darwin
 import Foundation
 import IOKit
 import OSLog
+import Synchronization
 
 enum DriverHealthEvidence: Equatable, Sendable {
   case unverified(rawStatusBytes: Int, note: String)
@@ -252,7 +253,14 @@ actor DriverBridge {
   // Retain ownership on an uncertain query; a UI cancellation is not a driver
   // cancellation barrier and must never allow a competing receive/control call.
   private var uncertainInspectionConnection: OpenDriverConnection?
-  private var permanentlyLockedOut = false
+  // Observations must report the bridge's actual quarantine even before a
+  // main-actor model consumes a failed report. The latch can only become true.
+  private nonisolated let controlLockout = Mutex(false)
+  nonisolated var controlSessionLockedOut: Bool { controlLockout.withLock { $0 } }
+  private var permanentlyLockedOut: Bool {
+    get { controlSessionLockedOut }
+    set { controlLockout.withLock { $0 = $0 || newValue } }
+  }
   private var issuedIdentifiers = Set<UInt64>()
   private var inspectorAttempts = InspectorAttemptSequence()
   private var liveConnection: OpenDriverConnection?
@@ -1226,7 +1234,8 @@ actor DriverBridge {
           break
         }
         guard let result else { throw ControlWireError.invalid("Inspector host deadline expired; support remains unknown") }
-        // A consumed, bound terminal record establishes completion, not success.
+        // A validated, consumed terminal record establishes completion, not
+        // success. This includes a strictly proved pre-route rejection.
         mayBePending = false
         inspectionOwner?.stage = "terminal_result_consumed"
         let response = result.events.last?.bytes ?? []

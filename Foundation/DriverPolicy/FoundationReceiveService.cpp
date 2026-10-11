@@ -125,6 +125,7 @@ struct Service::Session {
     OSSharedPtr<IOMemoryMap> mapping;
     RawSink sink;
     bool armed{};
+    bool runtimeDetached{};
     uint8_t plugCount{};
     uint32_t ompr{};
     uint8_t managedPlug{0xff};
@@ -199,7 +200,7 @@ struct Service::Session {
         return kIOReturnSuccess;
     }
     bool CurrentLocked() const {
-        return registry->IsCurrent(route) && hardware->IsAvailable();
+        return !runtimeDetached && registry->IsCurrent(route) && hardware->IsAvailable();
     }
     void FailLocked(kern_return_t status) {
         sink.SetState(State::Failed, status);
@@ -211,6 +212,7 @@ struct Service::Session {
         uint32_t bandwidth = 0;
         {
             Guard guard(lock);
+            if (runtimeDetached) return;
             cleanupRequested = true;
             if (!registry->IsCurrent(route) || irm->GetGeneration() != route.generation)
                 generationInvalidated = true;
@@ -250,6 +252,7 @@ struct Service::Session {
                 uint32_t bandwidth = 0;
                 {
                     Guard guard(self->lock);
+                    if (self->runtimeDetached) return;
                     self->connectionOwned = false;
                     if (self->generationInvalidated || !self->registry->IsCurrent(self->route) ||
                         self->irm->GetGeneration() != self->route.generation) {
@@ -283,6 +286,7 @@ struct Service::Session {
                             bool mustQuarantine = false;
                             {
                                 Guard guard(self->lock);
+                                if (self->runtimeDetached) return;
                                 if (self->generationInvalidated) {
                                     self->resourcesOwned = false;
                                 } else if (releaseStatus == ASFW::IRM::AllocationStatus::Success &&
@@ -313,6 +317,7 @@ struct Service::Session {
                 bool mustQuarantine = false;
                 {
                     Guard guard(self->lock);
+                    if (self->runtimeDetached) return;
                     if (self->generationInvalidated) {
                         self->resourcesOwned = false;
                     } else if (status == ASFW::IRM::AllocationStatus::Success &&
@@ -366,6 +371,7 @@ struct Service::Session {
                 bool start = false, cleanup = false, mustQuarantine = false;
                 {
                     Guard guard(self->lock);
+                    if (self->runtimeDetached) return;
                     self->connectInFlight = false;
                     if (status == ASFW::CMP::CMPStatus::Success &&
                         ownership == ASFW::CMP::MutationOwnership::Owned) {
@@ -412,6 +418,7 @@ struct Service::Session {
                     AllocationRefusalReason::SnapshotReadFailed,
                     ToIOReturn(status), false);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing) self->FailLocked(ToIOReturn(status));
                 return;
             }
@@ -421,9 +428,14 @@ struct Service::Session {
                     AllocationRefusalReason::MalformedResourceSnapshot,
                     kIOReturnBadArgument, true, snapshot);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing)
                     self->FailLocked(kIOReturnBadArgument);
                 return;
+            }
+            {
+                Guard guard(self->lock);
+                if (self->runtimeDetached) return;
             }
             const auto channel = ASFW::Protocols::DV::FirstAvailableChannel(snapshot);
             const auto record = self->registry->SnapshotByGuid(self->route.guid);
@@ -433,6 +445,7 @@ struct Service::Session {
                     AllocationRefusalReason::AllChannelsOccupied,
                     kIOReturnNoResources, true, snapshot);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing) self->FailLocked(kIOReturnNoResources);
                 return;
             }
@@ -442,6 +455,7 @@ struct Service::Session {
                     AllocationRefusalReason::RegistryRecordUnavailable,
                     kIOReturnNoResources, true, snapshot);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing) self->FailLocked(kIOReturnNoResources);
                 return;
             }
@@ -453,6 +467,7 @@ struct Service::Session {
                     AllocationRefusalReason::StaleSpeedDecision,
                     kIOReturnAborted, true, snapshot);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing)
                     self->FailLocked(kIOReturnAborted);
                 return;
@@ -471,6 +486,7 @@ struct Service::Session {
                     AllocationRefusalReason::InvalidBandwidthBudget,
                     kIOReturnBadArgument, true, snapshot);
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() == State::Preparing) self->FailLocked(kIOReturnBadArgument);
                 return;
             }
@@ -510,6 +526,7 @@ struct Service::Session {
                 plan.speedEvidence |= kSuccessfulProbeLimit;
             {
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() != State::Preparing || !self->CurrentLocked()) return;
                 self->managedChannel = *channel;
                 self->managedBandwidth = *bandwidth;
@@ -563,6 +580,7 @@ struct Service::Session {
                     bool connect = false, cleanup = false;
                     {
                         Guard guard(self->lock);
+                        if (self->runtimeDetached) return;
                         self->allocationInFlight = false;
                         if (allocationStatus == ASFW::IRM::AllocationStatus::Success &&
                             ownership == ASFW::IRM::ResourceOwnership::Owned) {
@@ -592,6 +610,7 @@ struct Service::Session {
             bool readPlug = false;
             {
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() != State::Preparing) return;
                 if (!success || !self->CurrentLocked()) {
                     self->FailLocked(success ? kIOReturnAborted : kIOReturnNotReady);
@@ -622,6 +641,7 @@ struct Service::Session {
             bool next = false, managed = false, mustQuarantine = false;
             {
                 Guard guard(self->lock);
+                if (self->runtimeDetached) return;
                 if (self->sink.GetState() != State::Preparing) return;
                 if (!self->CurrentLocked()) { self->FailLocked(kIOReturnAborted); return; }
                 if (!success) { self->FailLocked(kIOReturnNotReady); return; }
@@ -774,6 +794,27 @@ kern_return_t Service::StopAll(bool busReset) {
     }
     if (result == kIOReturnSuccess) target->BeginCleanup(target);
     return result;
+}
+kern_return_t Service::RetireRuntimeBindings() {
+    if (!lock_) return kIOReturnNoResources;
+    Guard guard(lock_);
+    if (!session_) return kIOReturnSuccess;
+    Guard sessionGuard(session_->lock);
+    auto& target = *session_.get();
+    if (target.runtimeDetached) return kIOReturnSuccess;
+    const auto state = target.sink.GetState();
+    if (target.armed || IsLive(state) || state == State::CleanupPending ||
+        state == State::Quarantined) return kIOReturnBusy;
+    // Root has already retired all callback producers. Do not retain clients
+    // borrowing the old bus through the user's final raw-ring drain.
+    target.runtimeDetached = true;
+    target.cmp.reset();
+    target.irm.reset();
+    target.registry.reset();
+    target.hardware.reset();
+    target.isoch = nullptr;
+    target.quarantine = {};
+    return kIOReturnSuccess;
 }
 kern_return_t Service::ReleaseOwner(uint64_t owner) {
     if (!lock_) return kIOReturnNotReady;

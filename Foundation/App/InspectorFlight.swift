@@ -11,6 +11,8 @@ final class InspectorFlight: @unchecked Sendable {
   let observationID = UUID()
   // Confined to creationExecutor; each store's data is confined to its writer.
   private nonisolated(unsafe) static var passiveStore: PassiveInspectorStore?
+  private nonisolated(unsafe) static var archivingPassiveStore = false
+  private nonisolated(unsafe) static var passiveArchiveQuarantine: PassiveEvidenceArchive.RecoveryRequired?
   private var compact: PassiveInspectorStore?
   private var compactStart: UInt64 = 0
   private var compactBytes: UInt64 = 0
@@ -28,6 +30,10 @@ final class InspectorFlight: @unchecked Sendable {
         throw ControlWireError.invalid("Compact evidence is only for passive transport STATUS")
       }
       let store = try await creationExecutor.run {
+        if let passiveArchiveQuarantine { throw passiveArchiveQuarantine }
+        guard !archivingPassiveStore else {
+          throw ControlWireError.invalid("Transport logs are being archived; passive observations are paused")
+        }
         if let passiveStore { return passiveStore }
         let new = try PassiveInspectorStore()
         passiveStore = new
@@ -38,6 +44,35 @@ final class InspectorFlight: @unchecked Sendable {
     return try await creationExecutor.run {
       try InspectorFlight(parentDirectory: parentDirectory, capabilityProbe: capabilityProbe,
                           tapeStateProbe: tapeStateProbe)
+    }
+  }
+
+  /// The caller must join the passive query owner first. Closing the cached
+  /// writer prevents a failed archive from resuming writes through old handles.
+  /// Only a verified relocation retires the cache and its retained-byte count.
+  static func archivePassiveEvidence(to destination: URL) async throws -> PassiveEvidenceArchive.Result {
+    let store = try await creationExecutor.run {
+      if let passiveArchiveQuarantine { throw passiveArchiveQuarantine }
+      guard !archivingPassiveStore else { throw ControlWireError.invalid("Transport log archive already in progress") }
+      archivingPassiveStore = true
+      return passiveStore
+    }
+    do {
+      if let store { try await store.writer.run { try store.closeForArchive() } }
+      return try await creationExecutor.run {
+        let root = try store?.directory.deletingLastPathComponent() ?? PassiveInspectorStore.defaultRoot()
+        let result = try PassiveEvidenceArchive.move(root: root, to: destination)
+        passiveStore = nil
+        archivingPassiveStore = false
+        return result
+      }
+    } catch {
+      let quarantine = error as? PassiveEvidenceArchive.RecoveryRequired
+      _ = try? await creationExecutor.run {
+        archivingPassiveStore = false
+        if let quarantine { passiveArchiveQuarantine = quarantine }
+      }
+      throw error
     }
   }
 
@@ -203,6 +238,12 @@ final class PassiveInspectorStore: @unchecked Sendable {
   private var active: UUID?
   private var observationBytes = 0
   private var failed = false
+  private var closedForArchive = false
+
+  static func defaultRoot() throws -> URL {
+    try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+      appropriateFor: nil, create: true).appendingPathComponent("RewindDV/PassiveTransportFlights")
+  }
 
   init(root: URL? = nil, limits: Limits = Limits(),
        segmentDirectoryBarrier: ((URL) throws -> Void)? = nil) throws {
@@ -211,8 +252,8 @@ final class PassiveInspectorStore: @unchecked Sendable {
     self.limits = limits
     self.segmentDirectoryBarrier = segmentDirectoryBarrier ?? Self.syncDirectory
     let fm = FileManager.default
-    let root = try root ?? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
-      appropriateFor: nil, create: true).appendingPathComponent("RewindDV/PassiveTransportFlights")
+    let root = try root ?? Self.defaultRoot()
+    try PassiveEvidenceArchive.requireNoPendingRecovery(root: root)
     try fm.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     var retained = 0
     if let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]) {
@@ -230,7 +271,7 @@ final class PassiveInspectorStore: @unchecked Sendable {
   }
 
   func begin(_ id: UUID) throws -> UInt64 {
-    guard !failed, active == nil else { throw ControlWireError.invalid("Passive evidence unavailable or prior observation unfinished") }
+    guard !closedForArchive, !failed, active == nil else { throw ControlWireError.invalid("Passive evidence unavailable or prior observation unfinished") }
     // Reserve a full bounded observation BEFORE any STATUS can be submitted.
     guard limits.sessionBytes - sessionBytes >= 64 * 1024,
       limits.retainedBytes - retainedAtStart - sessionBytes >= 64 * 1024 else {
@@ -255,7 +296,7 @@ final class PassiveInspectorStore: @unchecked Sendable {
     return UInt64(segmentBytes)
   }
   func append(_ bytes: Data, observation: UUID) throws {
-    guard !failed, active == observation, let file,
+    guard !closedForArchive, !failed, active == observation, let file,
       observationBytes + bytes.count <= 64 * 1024, sessionBytes + bytes.count <= limits.sessionBytes,
       retainedAtStart + sessionBytes + bytes.count <= limits.retainedBytes else {
       failed = true
@@ -282,10 +323,233 @@ final class PassiveInspectorStore: @unchecked Sendable {
       active = nil
     } catch { failed = true; throw error }
   }
+
+  func closeForArchive() throws {
+    guard active == nil || failed else {
+      throw ControlWireError.invalid("An admitted transport observation must finish before archiving")
+    }
+    closedForArchive = true
+    try file?.synchronize()
+    try file?.close()
+    file = nil
+  }
   private static func syncDirectory(_ url: URL) throws {
     let fd = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
     guard fd >= 0 else { throw CocoaError(.fileWriteUnknown) }
     defer { Darwin.close(fd) }
     guard fsync(fd) == 0 else { throw CocoaError(.fileWriteUnknown) }
+  }
+}
+
+/// Relocate the complete, quiescent status-log tree without deleting or copying
+/// original files. Same-volume rename preserves their bytes, modes and inodes;
+/// selecting another volume fails before any original is moved. This is separate
+/// from the deliberately bounded support ZIP, which cannot retire evidence.
+enum PassiveEvidenceArchive {
+  struct RecoveryRequired: LocalizedError {
+    let marker: URL
+    let message: String
+    var errorDescription: String? { message + " Recovery record: " + marker.path }
+  }
+  struct Entry: Codable, Equatable, Sendable {
+    let path: String
+    let directory: Bool
+    let mode: UInt16
+    let inode: UInt64
+    let bytes: Int64
+    let sha256: String?
+  }
+  struct Result: Sendable {
+    let directory: URL
+    let fileCount: Int
+    let bytes: Int64
+  }
+  struct Manifest: Codable {
+    var schema = "rewinddv.transport-log-archive.v1"
+    let source: String
+    let createdUTC: String
+    let entries: [Entry]
+  }
+  private struct PendingMove: Encodable {
+    let source: String
+    let originalLogLocation: String
+    let originalRootDevice: Int32
+    let originalRootInode: UInt64
+    let manifest: String
+    let state = "Unfinished archive. Do not resume observations or infer a completed relocation while this record exists."
+  }
+
+  static func recoveryMarker(root: URL) -> URL {
+    root.deletingLastPathComponent().appendingPathComponent("." + root.lastPathComponent + ".archive-recovery.json")
+  }
+  static func requireNoPendingRecovery(root: URL) throws {
+    let marker = recoveryMarker(root: root)
+    var value = stat()
+    if lstat(marker.path, &value) == 0 {
+      throw RecoveryRequired(marker: marker,
+        message: "A transport log archive needs reconciliation. Original logs must be verified at the locations in this record before another archive or observation can start.")
+    }
+    guard errno == ENOENT else { throw CocoaError(.fileReadUnknown) }
+  }
+
+  static func move(root: URL, to destination: URL,
+    syncDirectory: (URL) throws -> Void = syncDirectory,
+    beforeMove: () throws -> Void = {}) throws -> Result {
+    let fm = FileManager.default
+    try requireNoPendingRecovery(root: root)
+    guard try metadata(root).st_mode & S_IFMT == S_IFDIR else { throw CocoaError(.fileReadInvalidFileName) }
+    let source = try canonicalDirectory(root)
+    let parent = try canonicalDirectory(destination)
+    guard parent != source, !parent.path.hasPrefix(source.path + "/") else {
+      throw ControlWireError.invalid("Choose an archive folder outside the transport logs")
+    }
+    let sourceStat = try metadata(source), parentStat = try metadata(parent)
+    guard sourceStat.st_mode & S_IFMT == S_IFDIR,
+      parentStat.st_mode & S_IFMT == S_IFDIR else { throw CocoaError(.fileReadInvalidFileName) }
+    guard sourceStat.st_dev == parentStat.st_dev else {
+      throw ControlWireError.invalid("Choose an archive folder on the same disk as rewindDV's logs. No logs were moved; copy the completed archive to another disk afterwards.")
+    }
+    let entries = try inventory(source)
+    let archive = parent.appendingPathComponent("rewindDV-transport-logs-" + UUID().uuidString)
+    try fm.createDirectory(at: archive, withIntermediateDirectories: false,
+      attributes: [.posixPermissions: 0o700])
+    let logs = archive.appendingPathComponent("PassiveTransportFlights")
+    let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try durableWrite(encoder.encode(Manifest(source: source.path,
+      createdUTC: Date().ISO8601Format(), entries: entries)), to: archive.appendingPathComponent("archive-manifest.json"))
+    // Sync existing log directories as well as the new manifest before commit.
+    for entry in entries.reversed() where entry.directory {
+      try syncDirectory(source.appendingPathComponent(entry.path))
+    }
+    try syncDirectory(source); try syncDirectory(archive); try syncDirectory(parent)
+    try beforeMove()
+    let currentRoot = try metadata(source)
+    guard currentRoot.st_dev == sourceStat.st_dev, currentRoot.st_ino == sourceStat.st_ino,
+      try inventory(source) == entries else {
+      throw ControlWireError.invalid("Transport logs changed during archive preparation; original logs were not moved")
+    }
+    let marker = recoveryMarker(root: source)
+    let pendingBytes = try encoder.encode(PendingMove(source: source.path, originalLogLocation: logs.path,
+      originalRootDevice: Int32(sourceStat.st_dev), originalRootInode: UInt64(sourceStat.st_ino),
+      manifest: archive.appendingPathComponent("archive-manifest.json").path))
+    try durableWrite(pendingBytes, to: marker)
+    // This durable intent also blocks a cold launch from treating a recreated
+    // empty source directory as recovery of the old, unverified log tree.
+    try syncDirectory(source.deletingLastPathComponent())
+    guard renamex_np(source.path, logs.path, UInt32(RENAME_EXCL)) == 0 else {
+      throw RecoveryRequired(marker: marker, message: "Original transport logs were not relocated. Archive intent remains pending at " + source.path)
+    }
+    do {
+      try syncDirectory(source.deletingLastPathComponent())
+      try syncDirectory(archive)
+      let relocatedRoot = try metadata(logs)
+      guard relocatedRoot.st_dev == sourceStat.st_dev, relocatedRoot.st_ino == sourceStat.st_ino,
+        try inventory(logs) == entries else { throw CocoaError(.fileReadCorruptFile) }
+      let result = Result(directory: archive, fileCount: entries.filter { !$0.directory }.count,
+        bytes: entries.reduce(0) { $0 + ($1.directory ? 0 : $1.bytes) })
+      let receipt: [String: Any] = ["schema": "rewinddv.transport-log-archive-receipt.v1",
+        "result": "verified relocation", "fileCount": result.fileCount,
+        "bytes": result.bytes, "originalFilesDeleted": false,
+        "completionCondition": "Valid only after the pending archive recovery record is durably cleared",
+        "scope": "Complete original log bytes relocated; not a transport or capture qualification"]
+      try durableWrite(JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]),
+        to: archive.appendingPathComponent("archive-receipt.json"))
+      try syncDirectory(archive)
+      try fm.removeItem(at: marker)
+      try syncDirectory(source.deletingLastPathComponent())
+      return result
+    } catch {
+      // If final marker retirement failed, restore a fail-closed recovery record
+      // before attempting rollback. A runtime quarantine also survives any
+      // inability to persist that record on a failing filesystem.
+      if !fm.fileExists(atPath: marker.path) {
+        try? durableWrite(pendingBytes, to: marker)
+        try? syncDirectory(source.deletingLastPathComponent())
+      }
+      let receipt = archive.appendingPathComponent("archive-receipt.json")
+      do {
+        if fm.fileExists(atPath: receipt.path) { try fm.removeItem(at: receipt) }
+        try syncDirectory(archive)
+      } catch {
+        throw RecoveryRequired(marker: marker,
+          message: "Archive completion could not be invalidated. Original logs remain at \(logs.path); do not delete them. \(error.localizedDescription)")
+      }
+      // Preserve the original location on any failed readback/barrier. If the
+      // rollback itself fails, report the actual surviving location and pause.
+      if renamex_np(logs.path, source.path, UInt32(RENAME_EXCL)) == 0 {
+        do {
+          guard try inventory(source) == entries else { throw CocoaError(.fileReadCorruptFile) }
+          try syncDirectory(source.deletingLastPathComponent()); try syncDirectory(archive)
+          if fm.fileExists(atPath: marker.path) { try fm.removeItem(at: marker) }
+          try syncDirectory(source.deletingLastPathComponent())
+        } catch {
+          throw RecoveryRequired(marker: marker,
+            message: "Original logs are restored at \(source.path), but archive rollback durability could not be proved. \(error.localizedDescription)")
+        }
+        throw ControlWireError.invalid("Archive verification failed; logs restored to \(source.path). Passive observations remain paused. \(error.localizedDescription)")
+      }
+      throw RecoveryRequired(marker: marker,
+        message: "Archive did not complete. Original logs remain at \(logs.path); do not delete them. Passive observations remain paused. \(error.localizedDescription)")
+    }
+  }
+
+  static func inventory(_ root: URL) throws -> [Entry] {
+    var result: [Entry] = []
+    func visit(_ directory: URL, relativeDirectory: String) throws {
+      for url in try FileManager.default.contentsOfDirectory(at: directory,
+        includingPropertiesForKeys: nil).sorted(by: { $0.path < $1.path }) {
+        let st = try metadata(url)
+        let kind = st.st_mode & S_IFMT
+        guard kind == S_IFDIR || kind == S_IFREG else {
+          throw ControlWireError.invalid("Transport log archive refuses symbolic links or special files; originals are retained")
+        }
+        // FileManager may return /var aliases for /private/var URLs. Build
+        // relative names from directory entries, never by slicing absolute URLs.
+        let relative = relativeDirectory.isEmpty ? url.lastPathComponent
+          : relativeDirectory + "/" + url.lastPathComponent
+        let hash = kind == S_IFREG ? try digest(url) : nil
+        result.append(Entry(path: relative, directory: kind == S_IFDIR,
+          mode: UInt16(st.st_mode & 0o7777), inode: UInt64(st.st_ino),
+          bytes: kind == S_IFREG ? Int64(st.st_size) : 0, sha256: hash))
+        if kind == S_IFDIR { try visit(url, relativeDirectory: relative) }
+      }
+    }
+    try visit(root, relativeDirectory: "")
+    return result.sorted { $0.path < $1.path }
+  }
+
+  private static func metadata(_ url: URL) throws -> stat {
+    var value = stat()
+    guard lstat(url.path, &value) == 0 else { throw CocoaError(.fileReadUnknown) }
+    return value
+  }
+  private static func canonicalDirectory(_ url: URL) throws -> URL {
+    guard let path = url.path.withCString({ realpath($0, nil) }) else { throw CocoaError(.fileReadUnknown) }
+    defer { free(path) }
+    return URL(fileURLWithPath: String(cString: path), isDirectory: true)
+  }
+  private static func digest(_ url: URL) throws -> String {
+    let fd = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    guard fd >= 0 else { throw CocoaError(.fileReadUnknown) }
+    let file = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    defer { try? file.close() }
+    var hash = SHA256()
+    while let bytes = try file.read(upToCount: 1024 * 1024), !bytes.isEmpty { hash.update(data: bytes) }
+    return hash.finalize().map { String(format: "%02x", $0) }.joined()
+  }
+  private static func durableWrite(_ bytes: Data, to url: URL) throws {
+    let fd = Darwin.open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: url.path]) }
+    let file = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    defer { try? file.close() }
+    try file.write(contentsOf: bytes); try file.synchronize()
+  }
+  private static func syncDirectory(_ url: URL) throws {
+    let fd = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
+    guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: url.path]) }
+    defer { Darwin.close(fd) }
+    guard fsync(fd) == 0 else {
+      throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: url.path])
+    }
   }
 }

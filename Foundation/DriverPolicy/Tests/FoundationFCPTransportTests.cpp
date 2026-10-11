@@ -100,6 +100,7 @@ struct Fixture {
     Fixture() {
         DeviceRecord record{};
         record.guid = kGuid;
+        record.deviceIncarnation = 1;
         record.nodeId = 3;
         record.gen = Generation{7};
         device = FWDevice::Create(record, ConfigROM{});
@@ -344,6 +345,7 @@ void TestResponseBeforeWriteReturnPublicationBarrier() {
     DeviceRegistry routes;
     DeviceRecord record{};
     record.guid = kGuid;
+    record.deviceIncarnation = 1;
     record.nodeId = 3;
     record.gen = Generation{7};
     auto device = FWDevice::Create(record, ConfigROM{});
@@ -357,10 +359,25 @@ void TestResponseBeforeWriteReturnPublicationBarrier() {
     bool submissionClosed = false;
     bool ready = false;
     bool asyncAcceptedObserved = false;
+    bool routeObserved = false;
+    uint32_t inspectorStages = 0x01; // admitted, route observer will reject
     auto policy = FoundationPolicy();
     policy.attemptObserver = [&](const FCPAttemptEvidence& evidence) {
+        if (evidence.stage == FCPAttemptStage::kRouteBound) {
+            // Model the inspector owner's exact-route rejection. Its terminal
+            // observation must not seal publication while SubmitCommand can
+            // still deliver synchronous transport-acceptance evidence.
+            routeObserved = true;
+            terminalObserved = true;
+            inspectorStages |= 0x20;
+            ready = submissionClosed;
+            assert(!ready);
+        }
         if (evidence.stage == FCPAttemptStage::kAsyncTransportAccepted) {
+            assert(routeObserved && terminalObserved && !submissionClosed);
+            assert(evidence.asyncHandle == 99);
             asyncAcceptedObserved = true;
+            inspectorStages |= 0x04;
         }
     };
     const auto handle = transport->SubmitCommand(
@@ -375,6 +392,7 @@ void TestResponseBeforeWriteReturnPublicationBarrier() {
     (void)handle; // response completion can make the public handle invalid.
     assert(terminalObserved);
     assert(asyncAcceptedObserved);
+    assert(inspectorStages == 0x25); // cannot masquerade as pre-binding 0x21
     submissionClosed = true;
     ready = terminalObserved;
     assert(ready); // publication happens only after SubmitCommand returns.

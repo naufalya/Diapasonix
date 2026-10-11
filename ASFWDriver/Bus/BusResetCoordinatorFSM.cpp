@@ -27,7 +27,6 @@ constexpr uint32_t kAppleScanBusDelayMs = 100;
 namespace ASFW::Driver {
 
 void BusResetCoordinator::BeginNewResetCycle() {
-    if (asyncSubsystem_) asyncSubsystem_->OnBusResetObserved();
     pendingBusResetEdge_ = false;
     stopFlushIssued_ = false;
     filtersEnabled_ = false;

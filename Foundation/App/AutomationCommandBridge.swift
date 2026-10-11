@@ -110,6 +110,7 @@ final class RewindDVCommandBridge {
     }
     switch command.name {
     case "status":
+      let bridgeLockedOut = model.bridge.controlSessionLockedOut
       return ["page": (model.page ?? .capture).accessibilityID,
               "source": model.monitorSource.rawValue,
               "driverReady": model.latestDriverSnapshot != nil && !model.refreshFailed,
@@ -118,7 +119,7 @@ final class RewindDVCommandBridge {
                 ["guid": String($0.guid), "name": $0.name,
                  "operational": $0.isOperational] as [String: Any]
               } ?? [],
-              "lockedOut": model.controlLockedOut || live.lockedOut,
+              "lockedOut": model.controlLockedOut || live.lockedOut || bridgeLockedOut,
               "captureActive": wholeTape.active || live.active || live.busy,
               "captureStatus": wholeTape.active ? wholeTape.status : live.detail,
               "captureFolder": wholeTape.evidenceURL?.path ?? live.flightURL?.path ?? NSNull(),

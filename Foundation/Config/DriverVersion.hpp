@@ -28,7 +28,7 @@ inline constexpr const char* kBuildTimestamp = "2026-10-04";
 inline constexpr const char* kBuildHost = "Xcode 27.0 (27A266a)";
 inline constexpr const char* kCompilerVersion = "Apple Clang";
 inline constexpr const char* kSemanticVersion = REWINDDV_PRODUCT_VERSION_STRING;
-inline constexpr const char* kFullVersionString = "rewindDV " REWINDDV_PRODUCT_VERSION_STRING " (Alpha) Driver Build" REWINDDV_STRINGIFY(REWINDDV_DRIVER_BUILD) " (ASFW ac8a124 derived)";
+inline constexpr const char* kFullVersionString = "rewindDV " REWINDDV_PRODUCT_VERSION_STRING " (" REWINDDV_RELEASE_CHANNEL_LABEL ") Driver Build" REWINDDV_STRINGIFY(REWINDDV_DRIVER_BUILD) " (ASFW ac8a124 derived)";
 inline constexpr const char* kBuildInfoString = "Foundation Build" REWINDDV_STRINGIFY(REWINDDV_DRIVER_BUILD) "; ownership and initial-reset hardening; no command replay; macOS 26 minimum; consult candidate source manifest";
 }
 

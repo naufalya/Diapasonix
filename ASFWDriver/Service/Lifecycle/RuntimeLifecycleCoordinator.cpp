@@ -162,7 +162,8 @@ StartStage RuntimeLifecycleCoordinator::CompletedStartStage() const noexcept {
 }
 
 bool RuntimeLifecycleCoordinator::IsSuspendReason(QuiesceReason reason) noexcept {
-    return reason == QuiesceReason::kSystemSuspend || reason == QuiesceReason::kWakeRebuild;
+    return reason == QuiesceReason::kSystemSuspend || reason == QuiesceReason::kWakeRebuild ||
+           reason == QuiesceReason::kBusResetRecovery;
 }
 
 bool RuntimeLifecycleCoordinator::IsProviderRevocation(QuiesceReason reason) noexcept {

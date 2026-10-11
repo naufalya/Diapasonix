@@ -133,7 +133,7 @@ struct AlphaDiagnosticsView: View {
   @ObservedObject private var diagnostics = AlphaDiagnosticsModel.shared
   let captureBusy: Bool
   var body: some View {
-    ArchiveSection("Alpha testing · flight recorder") {
+    ArchiveSection(ProductIdentity.channelLabel + " testing · flight recorder") {
       Text(diagnostics.warning ?? "Session observations are recorded automatically. Detailed command and capture flight records are retained separately.")
         .foregroundStyle(diagnostics.warning == nil ? Color.secondary : Color.orange)
       Text("No automatic upload. The support ZIP excludes raw recordings/video, but can contain file paths, deck GUIDs and tape metadata. Keep original capture folders for follow-up.")

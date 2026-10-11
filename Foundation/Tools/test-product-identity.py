@@ -10,8 +10,8 @@ import sys
 sys.dont_write_bytecode = True
 import product_identity as p
 
-EXPECTED = {'product_version': '0.1.1', 'channel': 'alpha', 'app_build': 191, 'driver_build': 194}
-HISTORY = [{'product_version':'0.1.0', 'app_build':190, 'driver_build':193}]
+EXPECTED = {'product_version': '0.1.9', 'channel': 'beta', 'app_build': 199, 'driver_build': 202}
+HISTORY = [{'product_version':'0.1.4', 'app_build':194, 'driver_build':197}]
 
 class IdentityTests(unittest.TestCase):
     def test_forward_numeric(self):
@@ -25,12 +25,12 @@ class IdentityTests(unittest.TestCase):
         for value in [0, -1, '191', True, 1.5, 10000]:
             with self.subTest(value=value), self.assertRaises(ValueError): p.build(value)
     def test_reserved_or_downgrade(self):
-        for key, value in [('app_build',190),('driver_build',193),('product_version','0.0.100'),('channel','stable')]:
+        for key, value in [('app_build',194),('driver_build',197),('product_version','0.0.100'),('channel','stable')]:
             i = dict(EXPECTED, **{key:value})
             with self.subTest(key=key), self.assertRaises(ValueError): p.validate(i, HISTORY)
     def test_components_not_interchanged(self):
         self.assertEqual(p.validate(EXPECTED,HISTORY),EXPECTED)
-        with self.assertRaises(ValueError): p.validate(dict(EXPECTED,app_build=194,driver_build=191),HISTORY)
+        with self.assertRaises(ValueError): p.validate(dict(EXPECTED,app_build=198,driver_build=195),HISTORY)
     def test_current_source(self): self.assertEqual(p.check(),EXPECTED)
     def test_same_identity_changed_bytes(self):
         a = {'identity':EXPECTED, 'executables_sha256':{'app':'a','driver':'b'}}
@@ -44,16 +44,16 @@ class IdentityTests(unittest.TestCase):
     def bundle(self, root):
         app = root/'RewindDV.app'; driver=app/'Contents/Library/SystemExtensions/net.rewinddigital.RewindDV.Driver.dext'
         driver.mkdir(parents=True); (app/'Contents/MacOS').mkdir()
-        a={'CFBundleIdentifier':'net.rewinddigital.RewindDV','CFBundleShortVersionString':'0.1.1','CFBundleVersion':'191','RewindDVAlphaVersion':'0.1.1','RewindDVProductVersion':'0.1.1','RewindDVReleaseChannel':'alpha','RewindDVRequiredDriverBuild':'194'}
-        d={'CFBundleIdentifier':'net.rewinddigital.RewindDV.Driver','CFBundleShortVersionString':'0.1.1','CFBundleVersion':'194','IOKitPersonalities':{'RewindDVFoundationController':{'FoundationBuildNumber':'194'}}}
+        a={'CFBundleIdentifier':'net.rewinddigital.RewindDV','CFBundleShortVersionString':'0.1.9','CFBundleVersion':'199','RewindDVAlphaVersion':'0.1.9','RewindDVProductVersion':'0.1.9','RewindDVReleaseChannel':'beta','RewindDVRequiredDriverBuild':'202'}
+        d={'CFBundleIdentifier':'net.rewinddigital.RewindDV.Driver','CFBundleShortVersionString':'0.1.9','CFBundleVersion':'202','IOKitPersonalities':{'RewindDVFoundationController':{'FoundationBuildNumber':'202'}}}
         (app/'Contents/Info.plist').write_bytes(plistlib.dumps(a));(driver/'Info.plist').write_bytes(plistlib.dumps(d))
         (app/'Contents/MacOS/RewindDV').write_bytes(b'app fixture');(driver/'net.rewinddigital.RewindDV.Driver').write_bytes(b'driver fixture')
         return app,a
     def test_actual_bundle_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             app,a=self.bundle(Path(tmp));result=p.bundle_identity(app,EXPECTED)
-            self.assertEqual(result['package_name'],'rewindDV-alpha-0.1.1-App191-Driver194.zip')
-            for key,bad in [('RewindDVRequiredDriverBuild','193'),('CFBundleShortVersionString','0.1.0'),('CFBundleVersion','194'),('RewindDVReleaseChannel','beta')]:
+            self.assertEqual(result['package_name'],'rewindDV-beta-0.1.9-App199-Driver202.zip')
+            for key,bad in [('RewindDVRequiredDriverBuild','194'),('CFBundleShortVersionString','0.1.0'),('CFBundleVersion','195'),('RewindDVReleaseChannel','alpha')]:
                 with self.subTest(key=key):
                     (app/'Contents/Info.plist').write_bytes(plistlib.dumps(dict(a,**{key:bad})))
                     with self.assertRaises(ValueError): p.bundle_identity(app,EXPECTED)

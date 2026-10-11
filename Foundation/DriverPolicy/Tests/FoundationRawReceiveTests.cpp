@@ -808,6 +808,37 @@ int main(int argc, char**) {
         assert(f.service.ReleaseOwner(10) == kIOReturnSuccess);
     }
     {
+        // Same-service rebuild must retain final bytes/ACK while severing every
+        // old bus borrower. Repeated old-owner calls cannot issue cleanup I/O.
+        Fixture f;
+        f.Active();
+        assert(f.service.RetireRuntimeBindings() == kIOReturnBusy);
+        auto context = f.isoch.CopyReceiveContext();
+        context->TestPayloadAt(0)[0] = 0x42;
+        context->TestDescriptorAt(0)->statusWord = (0x841du << 16) | (4096 - 348);
+        f.hardware->SetTestRegister(static_cast<Register32>(DMAContextHelpers::IsoRcvContextControlSet(0)), 0);
+        f.registry->InvalidateLiveMappingsForBusReset();
+        assert(f.service.StopAll(true) == kIOReturnSuccess);
+        const auto status = f.Status();
+        assert(status.writeSequence == 1);
+        const auto reads = f.bus.reads;
+        const auto locks = f.bus.LockCount(), writes = f.bus.WriteCount();
+        std::weak_ptr<ASFW::CMP::CMPClient> oldCMP = f.cmp;
+        std::weak_ptr<ASFW::IRM::IRMClient> oldIRM = f.irm;
+        f.cmp.reset(); f.irm.reset();
+        assert(!oldCMP.expired() && !oldIRM.expired());
+        assert(f.service.RetireRuntimeBindings() == kIOReturnSuccess);
+        assert(oldCMP.expired() && oldIRM.expired());
+        assert(f.service.RetireRuntimeBindings() == kIOReturnSuccess);
+        assert(f.service.Stop(10, f.session.epoch) == kIOReturnSuccess);
+        assert(f.service.StopAll() == kIOReturnSuccess);
+        assert(f.Status().writeSequence == status.writeSequence);
+        assert(f.Status().state == status.state);
+        assert(f.service.Acknowledge(10, f.session.epoch, 1) == kIOReturnSuccess);
+        assert(f.service.ReleaseOwner(10) == kIOReturnSuccess);
+        assert(f.bus.reads == reads && f.bus.LockCount() == locks && f.bus.WriteCount() == writes);
+    }
+    {
         auto* f = new Fixture; // deliberate retained quarantine graph
         f->Active();
         f->hardware->SetTestRegister(static_cast<Register32>(DMAContextHelpers::IsoRcvContextControlSet(0)),

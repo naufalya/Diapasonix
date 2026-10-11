@@ -1,7 +1,67 @@
 {
   "policy": "Prior distributed or reserved high-water identities; immutable. Current ProductIdentity.json reserves the next candidate. Before advancing it, append the old identity here and audit external usage. No automatic increments. Historical component hashes remain in release records.",
   "prior_identities": [
-    {"product_version": "0.0.96", "app_build": 190, "driver_build": 193, "meaning": "Published alpha-0.0.96; immutable download identity"},
-    {"product_version": "0.1.0", "app_build": 190, "driver_build": 193, "meaning": "Historical macOS bundle marketing version high-water; same published components"}
+    {
+      "product_version": "0.0.96",
+      "app_build": 190,
+      "driver_build": 193,
+      "meaning": "Published alpha-0.0.96; immutable download identity"
+    },
+    {
+      "product_version": "0.1.0",
+      "app_build": 190,
+      "driver_build": 193,
+      "meaning": "Historical macOS bundle marketing version high-water; same published components"
+    },
+    {
+      "product_version": "0.1.1",
+      "app_build": 191,
+      "driver_build": 194,
+      "meaning": "Signed/notarized candidate; Phase2A activation/UI qualified; Phase2B blocked by passive status evidence budget exhaustion. Immutable existing artifact."
+    },
+    {
+      "product_version": "0.1.2",
+      "app_build": 192,
+      "driver_build": 195,
+      "meaning": "Signed/notarized App192/Driver195; SIP-on budget recovery and bounded Sony DV qualification accepted with warnings. Immutable candidate and originals retained."
+    },
+    {
+      "product_version": "0.1.3",
+      "app_build": 193,
+      "driver_build": 196,
+      "meaning": "Signed/notarized App193/Driver196 candidate immutable. Actual196 activation verified; bounded fresh capture preserved safely but conflict in first recorded frame prevented automatic cleanup."
+    },
+    {
+      "product_version": "0.1.4",
+      "app_build": 194,
+      "driver_build": 197,
+      "meaning": "Signed/notarized App194/Driver197 candidate immutable. Actual197 activation verified; physical capture qualification blocked by persistent uncertain-response recovery fence. Original candidate and rollback retained."
+    },
+    {
+      "product_version": "0.1.5",
+      "app_build": 195,
+      "driver_build": 198,
+      "meaning": "Signed/notarized App195/Driver198 retained unchanged. One reconnect/capture passed; later robustness reset storms and app lockout reproduced. Source app lockout fix accepted separately; bus-reset cause remains unproven."
+    },
+    {
+      "product_version": "0.1.6",
+      "app_build": 196,
+      "driver_build": 199,
+      "meaning": "Signed/notarized App196/Driver199 immutable. Three reconnects and bounded capture passed. Source-flagged first camera frame retained in viewing copy; originals preserved; bus-reset root cause remains unproven."
+    },
+    {
+      "product_version": "0.1.7",
+      "channel": "alpha",
+      "app_build": 197,
+      "driver_build": 200,
+      "meaning": "Signed/notarized App197/Driver200 retained unchanged. Controlled reread produced a clean viewing start and clean prior suspect timecode; original distortion was present in received DV, with exact source cause unresolved."
+    },
+    {
+      "product_version": "0.1.8",
+      "channel": "beta",
+      "app_build": 198,
+      "driver_build": 201,
+      "meaning": "Signed/notarized App198/Driver201 UI beta installed; Driver201 activation registered while200 remained attached. Metadata/layout changes accepted. User observed square Dock icon caused by raw runtime image override; superseded without altering this delivered artifact."
+    }
   ]
 }

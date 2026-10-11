@@ -58,6 +58,8 @@ struct LiveReceiveBatch: Sendable {
   @Published private(set) var verificationElapsedSeconds: TimeInterval = 0
   @Published private(set) var ingestDestinationVolumeName: String?
   @Published private(set) var verifiedCaptureURL: URL?
+  @Published private(set) var captureClipMessage: String?
+  @Published private(set) var captureClipReceipt: DVReviewedRangeExporter.Receipt?
   @Published private(set) var ingestDetail = "No ingest in progress"
   @Published private(set) var diagnosticWarning: String?
   @Published private(set) var awaitingTapeStop = false
@@ -213,6 +215,7 @@ struct LiveReceiveBatch: Sendable {
     verificationElapsedSeconds = 0
     verificationProgressStartedAt = nil
     verifiedCaptureURL = nil
+    captureClipMessage = nil; captureClipReceipt = nil
     flightURL = nil
     hasReceiveSession = false
     hasCurrentPreview = false
@@ -450,7 +453,40 @@ struct LiveReceiveBatch: Sendable {
           }
           let result = try await export.value
           verification = result
-          verifiedCaptureURL = result.captureFile.map { flightURL.appendingPathComponent($0) }
+          ingestDetail = "Finalizing the viewing clip; original receive stays intact…"
+          do {
+            let finalized = try await Task.detached(priority: .utility) {
+              let clip = try DVCaptureClipFinalizer.finalize(at: flightURL, verification: result,
+                deckName: deck.name, deckGUID: deck.guid)
+              var finalFrame: LivePreservedFrame?
+              if let receipt = clip.receipt, let url = clip.clipURL,
+                receipt.outputByteCount >= 120_000 {
+                let input = try FileHandle(forReadingFrom: url); defer { try? input.close() }
+                try input.seek(toOffset: receipt.outputByteCount - 120_000)
+                guard let bytes = try input.read(upToCount: 120_000), bytes.count == 120_000 else {
+                  throw LiveMonitorError.failed("Finalized clip preview read failed")
+                }
+                finalFrame = LivePreservedFrame(bytes: bytes, ordinal: receipt.endSourceFrameOrdinalExclusive - 1,
+                  timecode: LiveDVMedia(frame: bytes)?.timecode)
+              }
+              return (clip, finalFrame)
+            }.value
+            captureClipMessage = finalized.0.message
+            captureClipReceipt = finalized.0.receipt
+            verifiedCaptureURL = finalized.0.clipURL
+            if let frame = finalized.1 {
+              await preview.showFinalFrame(frame)
+              preview.metadata.begin(automatic: false)
+              preview.metadata.offer(frame.bytes, ordinal: frame.ordinal)
+              await preview.metadata.refresh()
+              preview.metadata.end()
+            }
+          } catch {
+            // Native/raw verification remains true. Do not advertise an
+            // incomplete presentation derivative as the finalized clip.
+            captureClipMessage = "Viewing clip finalization needs attention: \(error.localizedDescription). Complete original receive retained."
+            verifiedCaptureURL = nil
+          }
           ingestDetail = "Verification finished — inspect the loss and source-quality report"
           // The completed verification now drives a persistent summary panel.
           verificationProgress = nil

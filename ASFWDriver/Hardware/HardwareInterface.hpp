@@ -234,6 +234,7 @@ class HardwareInterface {
     };
 
     void SetTestRegister(Register32 reg, uint32_t value) noexcept;
+    void SetTestSoftResetCompletes(bool completes) noexcept;
     // Host fake only: emulate DMA changing memory at an MMIO read boundary.
     void SetTestReadHook(std::function<void(Register32)> hook);
     void SetTestDMACommand(OSSharedPtr<IODMACommand> command);

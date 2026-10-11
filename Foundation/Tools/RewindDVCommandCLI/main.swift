@@ -156,7 +156,7 @@ private func call(_ command: Command) throws -> [String: Any] {
     }
   }
   guard connected == 0 else {
-    throw CommandError.message("RewindDV is not accepting commands. Open the app and accept its alpha notice.")
+    throw CommandError.message("RewindDV is not accepting commands. Open the app and accept its testing notice.")
   }
   var timeout = timeval(tv_sec: 30, tv_usec: 0)
   _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))

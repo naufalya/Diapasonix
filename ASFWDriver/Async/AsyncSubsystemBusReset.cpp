@@ -15,6 +15,12 @@
 namespace ASFW::Async {
 
 void AsyncSubsystem::OnBusResetObserved() noexcept {
+    // Close publication at IRQ ingress, before deferred Self-ID work or any
+    // cancellation callbacks can run. Keep it closed if recovery is required.
+    is_bus_reset_in_progress_.store(1, std::memory_order_release);
+    DrainSubmission();
+    resetRecovery_.ObserveReset();
+    resetRecoveryHardware_ = nullptr;
     if (generationTracker_) generationTracker_->OnBusResetObserved();
 }
 
@@ -59,8 +65,52 @@ void AsyncSubsystem::OnBusResetBegin(uint8_t nextGen) {
 }
 
 void AsyncSubsystem::OnBusResetComplete(uint8_t stableGen) {
+    const auto bus = generationTracker_ ? generationTracker_->GetCurrentState()
+                                        : Bus::GenerationTracker::BusState{};
+    if (!bus.requestGenerationValid || bus.generation8 != stableGen) {
+        // Only the currently accepted Self-ID generation can finish this edge.
+        // Keep publication closed while a mismatched/stale completion is rejected.
+        ASFW_LOG_ERROR(Async, "OnBusResetComplete: unconfirmed generation=%u; admission remains closed", stableGen);
+        return;
+    }
+    const bool uncertain = HasUncertainWire();
+    resetRecovery_.AcceptReset(bus.requestGenerationValid ? bus.requestGeneration : UINT32_MAX,
+                               uncertain);
+    if (uncertain) {
+        // New Self-ID alone is NOT a local receive-FIFO boundary. Let root
+        // retire native/DMA owners, flush the controller and build a fresh graph.
+        // The old gate, labels and FCP uncertainty remain intact until then.
+        resetRecoveryHardware_ = hardware_;
+        resetRecoveryAcceptedUsec_ = GetCurrentTimeUsec();
+        ASFW_LOG(Async, "Reset recovery required: epoch=%llu generation=%u proofReady=%u; admission remains closed, commandsReplayed=0",
+                 resetRecovery_.Epoch(), resetRecovery_.Generation(), resetRecovery_.Ready());
+        return;
+    }
     is_bus_reset_in_progress_.store(0, std::memory_order_release);
     ASFW_LOG(Async, "OnBusResetComplete: gen=%u", stableGen);
+}
+
+bool AsyncSubsystem::RetireResetWire(Driver::HardwareInterface& hardware,
+                                     const Shared::NativeCallbackDrain& callbacks) {
+    if (&hardware != resetRecoveryHardware_ || isRunning_ ||
+        acceptingSubmissions_.load(std::memory_order_acquire) ||
+        !hardware.IsAvailable() || hardware.HardwareGone()) return false;
+    const auto epoch = resetRecovery_.Epoch();
+    return resetRecovery_.Retire(epoch, dmaContextsRetired_,
+        callbacks.AllTerminal() && !callbacks.Quarantined(), [&hardware] {
+            // The write itself must have admitted MMIO. A failed/no-op write
+            // followed by reading an already-clear bit is not a reset receipt.
+            {
+                auto access = hardware.TryBeginAccess();
+                if (!access || access.Read(Driver::Register32::kHCControl) == UINT32_MAX)
+                    return false;
+                access.WriteAndFlush(Driver::Register32::kHCControlSet,
+                                     Driver::HCControlBits::kSoftReset);
+            }
+            return hardware.WaitHC(Driver::HCControlBits::kSoftReset, false,
+                                   Driver::kSoftResetTimeoutUsec, Driver::kSoftResetPollUsec) &&
+                   hardware.IsAvailable() && !hardware.HardwareGone();
+        });
 }
 
 void AsyncSubsystem::RearmATContexts() {

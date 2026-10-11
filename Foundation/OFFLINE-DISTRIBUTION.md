@@ -29,7 +29,7 @@ Removal is quitting this app and moving its extracted copy to Trash; restore you
 preserved app if you replaced it yourself. No driver activation/removal is needed.
 
 Playback, raw metadata inspection, evidence maps/review and supported archive
-exports remain available. Start the app and accept its alpha notice. The CLI/MCP
+exports remain available. Start the app and accept its testing notice. The CLI/MCP
 uses the running app; external paths require a GUI sandbox grant for this session.
 Only one offline app-owned CLI command server runs at a time. The packaged CLI
 uses the separate offline socket and locally excludes hardware commands before

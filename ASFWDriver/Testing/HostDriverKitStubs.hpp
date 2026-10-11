@@ -73,8 +73,10 @@ private:
 
 class OSAction : public OSObject {};
 
+class OSDictionary;
 class IOService : public OSObject {
 public:
+    kern_return_t CopyProperties(OSDictionary** properties) { *properties = nullptr; return kIOReturnUnsupported; }
     virtual kern_return_t Start(IOService*) { return kIOReturnSuccess; }
     virtual void Stop(IOService*) {}
 };

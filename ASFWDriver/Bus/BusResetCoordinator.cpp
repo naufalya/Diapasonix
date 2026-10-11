@@ -120,6 +120,7 @@ void BusResetCoordinator::OnIrq(uint32_t intEvent, uint64_t timestamp) {
     bool relevant = false;
 
     if ((intEvent & IntEventBits::kBusReset) != 0U) {
+        if (asyncSubsystem_) asyncSubsystem_->OnBusResetObserved();
         // Mask the level source before returning to the interrupt dispatcher.
         // Reset only the previous cycle's software evidence, then retain any
         // completion carried by this same snapshot for the deferred FSM.

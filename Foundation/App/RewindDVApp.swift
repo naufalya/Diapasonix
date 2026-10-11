@@ -69,10 +69,15 @@ final class RewindDVModel: ObservableObject {
   private let windObserver = WindStopObserver()
   private let externalTransportObserver = ExternalDeckTransportObserver()
   private(set) var externalTransportObservationActive = false
-  private var passiveObservationFailureRoute: FoundationRoute?
+  private var passiveRecovery = PassiveObservationRecoveryGate()
+  @Published private(set) var passiveArchiveStatus = ""
+  var passiveArchiveReadyToResume: Bool { passiveRecovery.awaitingResume && passiveRecovery.archiveVerified }
+  var canResumePassiveObservations: Bool {
+    selectedRoute.map { passiveRecovery.canResume(on: $0) } ?? false
+  }
   var passiveTransportObservationAvailable: Bool {
     guard let selectedRoute else { return false }
-    return !windObservationActive && passiveObservationFailureRoute != selectedRoute
+    return !windObservationActive && passiveRecovery.mayObserve(on: selectedRoute)
   }
   @Published private var stoppedWindReceipt: URL?
   @Published var windStatus = ""
@@ -80,11 +85,13 @@ final class RewindDVModel: ObservableObject {
   @Published private(set) var deckTimecode = DeckTimecodeDisplayState()
   private var deckTimecodeRoute: FoundationRoute?
   private var deckTimecodeDisabled = false
+  private var deckTimecodeBudgetFailed = false
   private var lastDeckTimecodeAttempt: UInt64 = 0
 
   func resetDeckTimecode() {
     deckTimecode = DeckTimecodeDisplayState(); deckTimecodeRoute = nil
     deckTimecodeDisabled = false; lastDeckTimecodeAttempt = 0
+    deckTimecodeBudgetFailed = false
   }
 
   /// Runs within the existing serialized observer/job, never a parallel poller.
@@ -111,6 +118,7 @@ final class RewindDVModel: ObservableObject {
       guard !report.controlLockedOut, report.route == route,
         let response = report.validatedDeckTimecode else {
         deckTimecodeDisabled = true
+        deckTimecodeBudgetFailed = false
         deckTimecode.unavailable(report.entries.first?.disposition ?? "No valid deck reply")
         return
       }
@@ -121,6 +129,7 @@ final class RewindDVModel: ObservableObject {
       guard selectedRoute == route, selectedDeck?.id == deck.id else { return }
       // No optional retries; a new connection permits a new qualification.
       deckTimecodeDisabled = true; deckTimecode.unavailable(error.localizedDescription)
+      deckTimecodeBudgetFailed = PassiveObservationRecoveryGate.isBudgetFailure(error.localizedDescription)
       if case DriverBridgeError.permanentSessionLockout = error { controlLockedOut = true }
     }
   }
@@ -146,6 +155,69 @@ final class RewindDVModel: ObservableObject {
 
   func pauseExternalTransportObservation() async {
     await externalTransportObserver.stopAndJoin()
+  }
+
+  func choosePassiveLogArchive(live: LiveMonitorModel, installer: SystemExtensionInstaller) {
+    guard !navigationLocked, !passiveArchiveReadyToResume,
+      !live.active, !live.busy, !live.lockedOut, !installer.isInFlight else { return }
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false; panel.canChooseDirectories = true
+    panel.prompt = "Archive transport logs"
+    panel.message = """
+      Move retained transport status logs to a new archive on this Mac's disk.
+      Every file is verified; no logs or recordings are deleted.
+      Observations stay paused until you choose Resume.
+      You can copy the completed archive to another disk afterwards.
+      """
+    let owner = NSApp.keyWindow ?? NSApp.mainWindow
+    panel.setContentSize(NSSize(width: 720, height: 500))
+    DispatchQueue.main.async {
+      guard panel.isVisible else { return }
+      panel.setContentSize(NSSize(width: 720, height: 500))
+      if let owner {
+        let visible = (owner.screen ?? NSScreen.main)?.visibleFrame ?? owner.frame
+        let x = min(max(owner.frame.midX - panel.frame.width / 2, visible.minX), max(visible.minX, visible.maxX - panel.frame.width))
+        let y = min(max(owner.frame.midY - panel.frame.height / 2, visible.minY), max(visible.minY, visible.maxY - panel.frame.height))
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+      } else { panel.center() }
+    }
+    guard panel.runModal() == .OK, let destination = panel.url else { return }
+    archivePassiveLogs(to: destination, live: live, installer: installer)
+  }
+
+  func archivePassiveLogs(to destination: URL, live: LiveMonitorModel, installer: SystemExtensionInstaller) {
+    guard !navigationLocked, !passiveArchiveReadyToResume,
+      !live.active, !live.busy, !live.lockedOut, !installer.isInFlight else { return }
+    // Reserve before awaiting, so no foreground operation can race relocation.
+    isBusy = true
+    passiveRecovery.beginArchive()
+    passiveArchiveStatus = "Joining transport observations and verifying retained logs…"
+    Task {
+      defer { isBusy = false }
+      await pauseExternalTransportObservation()
+      let accessed = destination.startAccessingSecurityScopedResource()
+      defer { if accessed { destination.stopAccessingSecurityScopedResource() } }
+      do {
+        let result = try await InspectorFlight.archivePassiveEvidence(to: destination)
+        passiveRecovery.archiveCompleted()
+        passiveArchiveStatus = "Archived and verified \(result.fileCount) files (\(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file))) at \(result.directory.path). Original log bytes are preserved."
+        handshakeFeedback = selectedRoute == nil || canResumePassiveObservations
+          ? "Transport logs archived. Choose Resume transport observations in Diagnostics."
+          : "Transport logs archived. A changed route or another transport error still needs review; observation has not resumed."
+      } catch {
+        passiveArchiveStatus = "Archive failed: \(error.localizedDescription)"
+        handshakeFeedback = "Transport observations remain paused. See the archive result in Diagnostics; retained evidence has not been discarded."
+      }
+    }
+  }
+
+  func resumePassiveObservationsAfterArchive(live: LiveMonitorModel, installer: SystemExtensionInstaller) {
+    guard canResumePassiveObservations, !navigationLocked,
+      !live.active, !live.busy, !live.lockedOut, !installer.isInFlight,
+      let route = selectedRoute, passiveRecovery.resume(on: route) else { return }
+    if PassiveObservationRecoveryGate.mayRecoverTimecode(budgetFailure: deckTimecodeBudgetFailed,
+      failedRoute: deckTimecodeRoute, currentRoute: route) { resetDeckTimecode() }
+    handshakeFeedback = "Resuming transport observations after verified log archive."
   }
 
   /// Reserve on the main actor before the first await. All foreground commands,
@@ -177,7 +249,7 @@ final class RewindDVModel: ObservableObject {
   func observeExternalTransport(live: LiveMonitorModel, deck: DiscoveredDeck,
                                 route: FoundationRoute) async {
     guard !externalTransportObservationActive, !isBusy, !wholeTapeActive, !windObservationActive,
-      passiveObservationFailureRoute != route, selectedDeck?.id == deck.id,
+      passiveRecovery.mayObserve(on: route), selectedDeck?.id == deck.id,
       selectedRoute == route else { return }
     externalTransportObservationActive = true
     defer { externalTransportObservationActive = false }
@@ -219,13 +291,19 @@ final class RewindDVModel: ObservableObject {
       _ = report // receipt remains preserved by the inspector flight
     }, idle: { [weak self, weak live] report in
       guard let self, let live else { return }
+      if report.controlLockedOut { self.controlLockedOut = true }
       await self.sampleDeckTimecode(deck: deck, route: route,
         transport: report.validatedTransportState, receiving: live.active || live.busy,
         stopping: self.isBusy || live.awaitingTapeStop)
     }, failed: { [weak self] reason in
       guard let self else { return }
-      self.passiveObservationFailureRoute = route
-      self.handshakeFeedback = "Passive transport observation paused: \(reason). No retry on this route. Raw reception, if active, continues; use explicit GUI STOP or physical STOP and Finish receiving. Resolve the evidence/route problem before reconnecting or reopening."
+      if self.bridge.controlSessionLockedOut { self.controlLockedOut = true }
+      let storage = PassiveObservationRecoveryGate.isBudgetFailure(reason)
+      self.passiveRecovery.failed(on: route, storageBudget: storage)
+      self.handshakeFeedback = "Passive transport observation paused: \(reason). No automatic retry. Raw reception, if active, continues; use explicit GUI STOP or physical STOP and Finish receiving. "
+        + (storage
+          ? "Open Diagnostics → Transport status logs to archive the retained logs and explicitly resume."
+          : "Review the route or evidence error before reconnecting or reopening.")
     })
     await externalTransportObserver.waitUntilEnded()
     await externalTransportObserver.stopAndJoin()
@@ -320,6 +398,7 @@ final class RewindDVModel: ObservableObject {
       } catch {
         guard !isBusy, !controlLockedOut, !requiresSupervisedStop else { return }
         latestDriverSnapshot = nil
+        if case DriverBridgeError.permanentSessionLockout = error { controlLockedOut = true }
         guard driverSnapshot != nil || !refreshFailed || refreshFeedback != error.localizedDescription else { return }
         driverSnapshot = nil
         selectedDeckID = nil
@@ -649,7 +728,7 @@ final class SystemExtensionInstaller: NSObject, ObservableObject,
 #endif
 struct RewindDVApp: App {
   private var alphaVersion: String {
-    Bundle.main.object(forInfoDictionaryKey: "RewindDVAlphaVersion") as? String ?? "development"
+    ProductIdentity.version
   }
   private var productTitle: String { ProductIdentity.display }
   @NSApplicationDelegateAdaptor(WholeTapeAppDelegate.self) private var appDelegate
@@ -711,12 +790,14 @@ struct RewindDVApp: App {
             DeviceInspectorView(model: model, live: live, activationInFlight: installer.isInFlight)
           case .diagnostics:
             DiagnosticsPage(model: model, installer: installer,
+              live: live,
               showActivationConfirmation: $showActivationConfirmation,
               activationLocked: live.active || live.busy || model.navigationLocked)
           }
         }
         .accessibilityIdentifier("page-\((model.page ?? .capture).accessibilityID)")
         .frame(minWidth: 760, minHeight: 560)
+        .background(WorkspaceWindowPresentation())
       }
       .onAppear {
         appDelegate.bind(model: model, live: live)
@@ -827,7 +908,7 @@ struct RewindDVApp: App {
             selectedDeckGUID: model.selectedDeck?.guidText,
             handshake: model.handshakeFeedback,
             modelBusy: model.isBusy,
-            controlLockedOut: model.controlLockedOut || live.lockedOut,
+            controlLockedOut: model.controlLockedOut || live.lockedOut || model.bridge.controlSessionLockedOut,
             stopNeedsSupervision: model.requiresSupervisedStop || live.awaitingTapeStop,
             liveActive: live.active,
             liveBusy: live.busy,
@@ -879,7 +960,7 @@ struct RewindDVApp: App {
         }
       }
       } else {
-        alphaAcknowledgement
+        alphaAcknowledgement.background(WorkspaceWindowPresentation())
       }
     }
     .windowStyle(.titleBar)
@@ -892,7 +973,7 @@ struct RewindDVApp: App {
           let revision = info["RewindDVCandidateRevision"] as? String ?? "Unpackaged development build"
           NSApplication.shared.orderFrontStandardAboutPanel(options: [
             .applicationName: "rewindDV",
-            .applicationVersion: "\(ProductIdentity.version) (Alpha) · App \(build) · Driver \(ProductIdentity.driverBuild) · \(revision)",
+            .applicationVersion: "\(ProductIdentity.version) (\(ProductIdentity.channelLabel)) · App \(build) · Driver \(ProductIdentity.driverBuild) · \(revision)",
             .version: build
           ])
         }
@@ -904,7 +985,7 @@ struct RewindDVApp: App {
         }
         AcknowledgmentsCommand()
       }
-      CommandMenu("Alpha testing") {
+      CommandMenu(ProductIdentity.channelLabel + " testing") {
         Button("Export support ZIP…") { AlphaDiagnosticsModel.shared.export() }
           .disabled(!disclaimerAccepted || live.active || live.busy || wholeTape.active || AlphaDiagnosticsModel.shared.exporting)
         Button("Include capture folder…") { AlphaDiagnosticsModel.shared.chooseCaptureFolder() }
@@ -1086,6 +1167,7 @@ private struct ArchivesPage: View {
 private struct DiagnosticsPage: View {
   @ObservedObject var model: RewindDVModel
   @ObservedObject var installer: SystemExtensionInstaller
+  @ObservedObject var live: LiveMonitorModel
   @Binding var showActivationConfirmation: Bool
   let activationLocked: Bool
 
@@ -1124,6 +1206,21 @@ private struct DiagnosticsPage: View {
         }
         .accessibilityIdentifier("driver-readiness")
         AlphaDiagnosticsView(captureBusy: activationLocked || installer.isInFlight)
+        ArchiveSection("Transport status logs") {
+          Text("Retained status logs have a 128 MiB session budget and 512 MiB storage budget. A full budget pauses passive deck observation; original logs are kept.")
+            .font(.callout).foregroundStyle(.secondary)
+          Text("Archive moves the complete log collection to a folder you choose on the same disk. It verifies every file and preserves original bytes. The support ZIP is a separate, bounded diagnostic copy and does not free this budget.")
+            .font(.caption).foregroundStyle(.secondary)
+          HStack {
+            Button("Archive transport logs…") { model.choosePassiveLogArchive(live: live, installer: installer) }
+              .disabled(model.passiveArchiveReadyToResume)
+              .accessibilityIdentifier("archive-transport-logs")
+            Button("Resume transport observations") { model.resumePassiveObservationsAfterArchive(live: live, installer: installer) }
+              .disabled(!model.canResumePassiveObservations)
+              .accessibilityIdentifier("resume-transport-observations")
+          }.disabled(activationLocked || installer.isInFlight)
+          Text(model.passiveArchiveStatus).font(.caption).textSelection(.enabled)
+        }
         ArchiveSection("Candidate identity") {
           VStack(alignment: .leading, spacing: 8) {
             LabeledContent("Driver class", value: "ASFWDriver")

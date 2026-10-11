@@ -24,6 +24,7 @@
 #include "../Protocols/DV/DVCaptureService.hpp"
 #include "../Scheduling/WatchdogCoordinator.hpp"
 #include "Lifecycle/RuntimeLifecycleCoordinator.hpp"
+#include "../Async/ResetRecoveryFence.hpp"
 #ifdef REWINDDV_FOUNDATION
 #include "../../Foundation/DriverPolicy/FoundationReceiveService.hpp"
 #endif
@@ -77,6 +78,7 @@ struct ServiceContext {
     OSSharedPtr<IOService> nativeDrainProvider;
     std::optional<ASFW::Driver::QuiescePlan> nativeDrainPlan;
     bool nativeDrainServiceRetained{false};
+    ASFW::Async::ResetRecoveryBudget resetRecoveryBudget; // survives runtime Reset
     std::atomic<bool> quarantineServiceRetained{false}; // one ownership retain, including queue lookup failure
     OSSharedPtr<OSAction> interruptAction;
 #ifndef ASFW_HOST_TEST
@@ -116,7 +118,7 @@ struct ServiceContext {
     // interrupt vector while the old source's kernel-side unregister is still
     // in flight; the resulting double-unregister panics the kernel on a shared
     // interrupt controller (observed 2026-07-10/11 on the FW643).
-    enum class ResetMode { Full, ForSuspend };
+    enum class ResetMode { Full, ForSuspend, ForRecovery };
     void Reset(ResetMode mode = ResetMode::Full);
 };
 

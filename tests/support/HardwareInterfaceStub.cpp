@@ -28,6 +28,7 @@ struct HardwareTestState {
     bool sendPhyConfigSucceeds{true};
     bool lastPhyConfigSucceeded{true};
     bool available{true};
+    bool softResetCompletes{false};
     bool globalResumeSent{false};
     bool contenderEnabled{false};
     std::optional<uint8_t> lastGapCount;
@@ -193,6 +194,10 @@ void HardwareInterface::WriteScoped(Register32 reg, uint32_t value) const noexce
             }
         }
         state.registers[KeyFor(reg)] = value;
+        if (reg == Register32::kHCControlSet && (value & HCControlBits::kSoftReset) &&
+            state.softResetCompletes) {
+            state.registers[KeyFor(Register32::kHCControl)] = 0;
+        }
         state.operations.push_back(TestOperation::Write);
 
         if (reg == Register32::kIntMaskSet) {
@@ -434,6 +439,10 @@ uint32_t HardwareInterface::ReadLinkControl() const noexcept {
 }
 
 uint32_t HardwareInterface::ReadCycleTime() const noexcept { return ReadScoped(Register32::kCycleTimer); }
+
+void HardwareInterface::SetTestSoftResetCompletes(bool completes) noexcept {
+    WithState(this, [completes](HardwareTestState& state) { state.softResetCompletes = completes; });
+}
 
 bool HardwareInterface::WaitHC(uint32_t mask, bool expectSet, uint32_t, uint32_t) const {
     const bool isSet = (ReadScoped(Register32::kHCControl) & mask) != 0U;

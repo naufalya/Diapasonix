@@ -4,7 +4,7 @@ import CryptoKit
 import RewindDVArchiveCore
 @testable import RewindDVMonitorCore
 
-private func surgeryFrame(pal: Bool = true, start: Bool? = nil, timecode: Int? = nil) -> Data {
+private func surgeryFrame(pal: Bool = true, start: Bool? = nil, timecode: Int? = nil, drop: Bool = false) -> Data {
   var d = Data(repeating: 255, count: pal ? 144000 : 120000)
   for sequence in 0..<(pal ? 12 : 10) {
     for local in 0..<150 {
@@ -22,8 +22,13 @@ private func surgeryFrame(pal: Bool = true, start: Bool? = nil, timecode: Int? =
       }
       if section == 2, let start { d.replaceSubrange((at + 3)..<(at + 8), with: [0x61,0xff,start ? 0x48 : 0xc8,0xff,0xff]) }
       if section == 1, let timecode {
-        let f = UInt8((timecode / 10) << 4 | timecode % 10)
-        for slot in stride(from: 6, through: 46, by: 8) { d.replaceSubrange((at + slot)..<(at + slot + 5), with: [0x13,f,0,0,0]) }
+        let rate = pal ? 25 : 30, seconds = timecode / rate
+        func bcd(_ value: Int) -> UInt8 { UInt8((value / 10) << 4 | value % 10) }
+        let f = bcd(timecode % rate) | (drop ? 0x40 : 0)
+        for slot in stride(from: 6, through: 46, by: 8) {
+          d.replaceSubrange((at + slot)..<(at + slot + 5), with:
+            [0x13, f, bcd(seconds % 60), bcd(seconds / 60 % 60), bcd(seconds / 3600)])
+        }
       }
     }
   }
@@ -118,6 +123,89 @@ private func withSurgery(_ bytes: Data, _ body: (URL, URL) throws -> Void) throw
   let policy = WorkspaceCapabilities(source: .surgery, fileReady: true, deckSelected: true,
     fastForwardSupported: true, liveMonitoring: true, shuttleForwardSupported: true, shuttleReverseSupported: true)
   #expect(MonitorAction.allCases.allSatisfy { !policy.allows($0) })
+}
+
+@Test func surgeryGroupsHeldTimecodeAtCaptureEdgesAndPreservesEveryFrame() throws {
+  var bytes = Data()
+  for _ in 0..<11 { bytes.append(surgeryFrame(pal: false, timecode: 7572)) }
+  for tc in 7600...9150 { bytes.append(surgeryFrame(pal: false, timecode: tc)) }
+  for _ in 0..<46 { bytes.append(surgeryFrame(pal: false, timecode: 9154)) }
+  try withSurgery(bytes) { source, folder in
+    let clip = try DVSurgeryClip.read(source)
+    #expect(clip.timeline.frameCount == 1608)
+    #expect(clip.segments.map(\.first) == [0, 11, 1562])
+    #expect(clip.segments.map(\.end) == [11, 1562, 1608])
+    #expect(clip.segments[0].reason == "Start of clip · Repeated timecode")
+    #expect(clip.segments[1].reason.contains("Timecode discontinuity"))
+    #expect(clip.segments[1].reason.contains("Timecode changes again"))
+    #expect(clip.segments[2].reason == "Repeated timecode · Timecode discontinuity")
+    let ranges = try clip.ranges(first: 0, end: 1608, splitScenes: true)
+    let destination = folder.appendingPathComponent("all-frames")
+    let receipt = try DVSurgeryByteExporter.export(source: source, expectedSHA256: clip.sha256,
+      ranges: ranges, destination: destination)
+    var combined = Data()
+    for item in receipt.outputs { combined.append(try Data(contentsOf: destination.appendingPathComponent(item.file))) }
+    #expect(combined == bytes)
+    #expect(try Data(contentsOf: source) == bytes)
+  }
+}
+
+@Test func surgeryHeldTimecodeKeepsRecordingMarkersAndSeparatesDistinctRuns() throws {
+  let observations = [(0, false), (1, false), (1, false), (1, true), (2, false), (8, false), (8, false), (9, false)]
+  var bytes = Data()
+  for (tc, start) in observations { bytes.append(surgeryFrame(start: start, timecode: tc)) }
+  try withSurgery(bytes) { source, _ in
+    let clip = try DVSurgeryClip.read(source)
+    #expect(clip.segments.map(\.first) == [0, 1, 3, 4, 5, 7])
+    #expect(clip.segments[1].reason == "Repeated timecode")
+    #expect(clip.segments[2].reason == "Recording start")
+    #expect(clip.segments[3].reason == "Timecode changes again")
+    #expect(clip.segments[4].reason == "Repeated timecode · Timecode discontinuity")
+  }
+  try withSurgery(surgeryFrame(timecode: 1) + surgeryFrame(timecode: 1)
+    + surgeryFrame(timecode: 8) + surgeryFrame(timecode: 8)) { source, _ in
+    let clip = try DVSurgeryClip.read(source)
+    #expect(clip.segments.map(\.first) == [0, 2])
+    #expect(clip.segments[1].reason == "Repeated timecode · Timecode discontinuity")
+  }
+}
+
+@Test func surgeryHeldTimecodeDoesNotBridgeUnknownConflictOrFormatChanges() throws {
+  var conflict = surgeryFrame(timecode: 1)
+  conflict[12000 + 80 + 7] = 2
+  var invalid = surgeryFrame(timecode: 1)
+  invalid[7] |= 128
+  for unknown in [surgeryFrame(), conflict, invalid] {
+    try withSurgery(surgeryFrame(timecode: 1) + unknown + surgeryFrame(timecode: 1)) { source, _ in
+      let clip = try DVSurgeryClip.read(source)
+      #expect(clip.segments.count == 1)
+      #expect(clip.segments[0].reason == "Start of clip")
+    }
+  }
+  try withSurgery(surgeryFrame(timecode: 1) + surgeryFrame(pal: false, timecode: 1)) { source, _ in
+    let clip = try DVSurgeryClip.read(source)
+    #expect(clip.segments.map(\.first) == [0, 1])
+    #expect(clip.segments[1].reason == "Format change")
+  }
+}
+
+@Test func surgeryKeepsValidTimecodeRolloverAndNumberingModeChanges() throws {
+  for (pal, drop, codes) in [(true, false, [2_159_999, 0, 1]),
+                            (false, false, [2_591_999, 0, 1]),
+                            (false, true, [1799, 1802, 1803]),
+                            (false, true, [17999, 18000, 18001])] {
+    let bytes = codes.reduce(into: Data()) { $0.append(surgeryFrame(pal: pal, timecode: $1, drop: drop)) }
+    try withSurgery(bytes) { source, _ in
+      let clip = try DVSurgeryClip.read(source)
+      #expect(clip.segments.count == 1)
+    }
+  }
+  try withSurgery(surgeryFrame(pal: false, timecode: 1)
+    + surgeryFrame(pal: false, timecode: 1, drop: true)) { source, _ in
+    let clip = try DVSurgeryClip.read(source)
+    #expect(clip.segments.map(\.first) == [0, 1])
+    #expect(clip.segments[1].reason == "Timecode discontinuity")
+  }
 }
 
 @Test(arguments: [DVSurgeryByteExporter.Layout.separate, .merged])

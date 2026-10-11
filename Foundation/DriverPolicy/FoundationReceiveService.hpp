@@ -30,6 +30,9 @@ public:
         std::function<void()> quarantine, SessionWire& output);
     kern_return_t Stop(uint64_t owner, uint64_t epoch);
     kern_return_t StopAll(bool busReset = false);
+    // Root-only: after native/async callback and DMA retirement, before bus destruction.
+    // Preserve the terminal raw ring and owner acknowledgement contract.
+    kern_return_t RetireRuntimeBindings();
     kern_return_t ReleaseOwner(uint64_t owner);
     kern_return_t Snapshot(uint64_t owner, uint64_t epoch, StatusWire& output) const;
     kern_return_t Acknowledge(uint64_t owner, uint64_t epoch, uint64_t through);

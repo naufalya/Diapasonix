@@ -66,9 +66,11 @@ public enum DVReviewedRangeExporter {
 
     public var segments: [Segment]? = nil
     public var sourceSnapshot: Snapshot? = nil
+    public var captureCleanup: DVCaptureCleanupEvidence? = nil
 
     private enum CodingKeys: String, CodingKey {
       case segments
+      case captureCleanup = "capture_cleanup"
       case sourceSnapshot = "source_snapshot"
       case schemaVersion = "schema_version"
       case completionState = "completion_state"
@@ -184,10 +186,13 @@ public enum DVReviewedRangeExporter {
     snapshot: Snapshot,
     first: UInt64,
     endExclusive: UInt64,
-    destination: URL
+    destination: URL,
+    captureCleanup: DVCaptureCleanupEvidence? = nil,
+    beforePublication: (() throws -> Void)? = nil
   ) throws -> Receipt {
     try Task.checkCancellation()
     try validate(snapshot: snapshot, first: first, endExclusive: endExclusive)
+    let outputName = captureCleanup == nil ? outputFileName : "capture.dv"
     let sourceReader = try RegularSource(source)
     defer { sourceReader.close() }
     guard sourceReader.byteCount == snapshot.sourceByteCount else {
@@ -223,7 +228,7 @@ public enum DVReviewedRangeExporter {
       sourceDigest.update(data: frame)
       if ordinal >= first && ordinal < endExclusive {
         let epoch = selectedEpochs[segments.count]
-        let name = split ? String(format: "segment-%06d.dv", segments.count + 1) : outputFileName
+        let name = split ? String(format: "segment-%06d.dv", segments.count + 1) : outputName
         if output == nil { output = try destinationDirectory.makeExclusiveWriter(named: name + ".partial") }
         try output!.write(contentsOf: frame)
         outputDigest.update(data: frame); segmentDigest.update(data: frame)
@@ -272,7 +277,7 @@ public enum DVReviewedRangeExporter {
     var receipt = Receipt(
       schemaVersion: snapshot.schemaVersion,
       completionState: "complete",
-      outputFile: split ? nil : outputFileName,
+      outputFile: split ? nil : outputName,
       sourceSHA256: snapshot.sourceSHA256,
       sourceByteCount: snapshot.sourceByteCount,
       sourceFrameCount: snapshot.frameCount,
@@ -297,6 +302,27 @@ public enum DVReviewedRangeExporter {
       archivalQualification: "not_established; this derivative does not replace or qualify an unmodified source master")
 
     if snapshot.schemaVersion == 2 || split { receipt.segments = segments; receipt.sourceSnapshot = snapshot }
+    if let cleanup = captureCleanup {
+      guard cleanup.kept.firstFrame == first, cleanup.kept.endFrameExclusive == endExclusive,
+        cleanup.kept.firstByte == sourceByteOffset, cleanup.kept.endByteExclusive == sourceByteEnd,
+        (first == 0 ? cleanup.excludedLeading == nil : cleanup.excludedLeading?.firstFrame == 0 && cleanup.excludedLeading?.endFrameExclusive == first),
+        (endExclusive == snapshot.frameCount ? cleanup.excludedTrailing == nil : cleanup.excludedTrailing?.firstFrame == endExclusive && cleanup.excludedTrailing?.endFrameExclusive == snapshot.frameCount) else {
+        throw DVIngestError.invalidEvidence("capture cleanup map does not match exported source range")
+      }
+    }
+    if let exclusion = captureCleanup?.excludedLeadingVideoStatus {
+      let e = exclusion.extent
+      guard first >= 3, sourceByteOffset >= 120_000, snapshot.frameByteCount == 120_000,
+        e.firstFrame == first - 1, e.endFrameExclusive == first,
+        e.firstByte == sourceByteOffset - 120_000,
+        e.endByteExclusive == sourceByteOffset,
+        e.conservativeRawStart < e.conservativeRawEndExclusive,
+        exclusion.statusCode == 0x0a, (1...1350).contains(exclusion.affectedVideoBlocks) else {
+        throw DVIngestError.invalidEvidence("source video-status exclusion does not match viewing prefix")
+      }
+    }
+    receipt.captureCleanup = captureCleanup
+    try beforePublication?()
 
     // This is the final cancellation boundary. Once commit begins, completion
     // is driven to a terminal success or durability error without observing a

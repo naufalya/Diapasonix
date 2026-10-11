@@ -6,15 +6,15 @@ import CoreFoundation
 /// noticeVersion whenever the risk notice changes materially. No cloud sync.
 public enum AlphaDisclaimer {
   public static let noticeVersion = 2
-  public static let title = "Alpha software — use at your own risk"
+  public static let title = "\(ProductIdentity.channelLabel) software — use at your own risk"
   public static let message = """
-    rewindDV LAB is experimental alpha software intended for supervised testing. It may contain defects, crash, interrupt tape operation, or produce incomplete, corrupted or lost captures. Compatibility and reliable operation are not guaranteed.
+    rewindDV LAB is experimental \(ProductIdentity.channel) software intended for supervised testing. It may contain defects, crash, interrupt tape operation, or produce incomplete, corrupted or lost captures. Compatibility and reliable operation are not guaranteed.
 
-    Tape playback and winding involve mechanical wear and can damage fragile tapes or equipment. Test with non-critical, write-protected tapes first; keep independent backups and verify every capture. Do not rely on this alpha as your only preservation copy.
+    Tape playback and winding involve mechanical wear and can damage fragile tapes or equipment. Test with non-critical, write-protected tapes first; keep independent backups and verify every capture. Do not rely on this \(ProductIdentity.channel) as your only preservation copy.
 
     Stay nearby while tape transport is active and keep the deck's physical STOP accessible. Do not quit the app or disconnect the deck, power or destination drive during capture, draining or verification. Recording and erasure of tape are not offered by rewindDV.
 
-    This alpha is provided “as is,” without warranties. You choose to use it at your own risk.
+    This \(ProductIdentity.channel) is provided “as is,” without warranties. You choose to use it at your own risk.
 
     By clicking Accept, you acknowledge these risks and choose to continue. Cancel quits the app. Your acceptance is saved locally for this macOS user on this Mac; it is not uploaded.
     """

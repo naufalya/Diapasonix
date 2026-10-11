@@ -4,7 +4,7 @@
 same executable also serves MCP over standard input/output. Commands use the
 app's existing playback, preservation, capture and driver models; the app owns
 all source files, capture state and deck connections. Start the app and accept
-its alpha notice before sending commands.
+its testing notice before sending commands.
 
 Build the client with the selected Xcode toolchain:
 
@@ -19,11 +19,11 @@ absolute path for every file or directory argument. Quote arguments containing
 spaces:
 
 ```sh
-rewinddv playback.open "path=/Volumes/DV/Capture 001.dv"
+rewinddv playback.open "path=/absolute/example/Capture 001.dv"
 rewinddv playback.seek seconds=12.5
 rewinddv playback.metadata
 rewinddv surgery.range first=100 end=125
-rewinddv surgery.export "destination=/Volumes/Derived"
+rewinddv surgery.export "destination=/absolute/example/Derived"
 ```
 
 Operations that scan or export return immediately. Poll the matching `.status`

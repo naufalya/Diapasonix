@@ -115,18 +115,17 @@ struct InspectorResult: Sendable {
     route: FoundationRoute, query: InspectorQuery) throws {
     let r = WireReader(data: data)
     guard data.count == Self.wireBytes else { throw ControlWireError.invalid("Inspector result size mismatch") }
-    for (offset, value) in [(0,UInt32(1)),(4,UInt32(Self.wireBytes)),(112,route.generation),
+    for (offset, value) in [(0,UInt32(1)),(4,UInt32(Self.wireBytes)),
       (116,UInt32(query.kind)),(132,UInt32(0)),(136,UInt32(query.frame.count))] {
       guard try r.integer(offset, as: UInt32.self) == value else { throw ControlWireError.invalid("Inspector result header mismatch") }
     }
     for (offset, value) in [(8,requestID),(16,operationID),(24,attemptID),(32,route.guid),
-      (40,route.driverInstanceID),(48,route.deviceIncarnation),(56,route.routeEpoch)] {
+      (40,route.driverInstanceID)] {
       guard value != 0, try r.integer(offset, as: UInt64.self) == value else {
         throw ControlWireError.invalid("Inspector result identity mismatch")
       }
     }
-    guard try r.integer(148, as: UInt16.self) == route.nodeID,
-      data[150] == query.page, data[151] == 0,
+    guard data[150] == query.page, data[151] == 0,
       Array(data[188..<196]) == query.frame + Array(repeating: 0, count: 8 - query.frame.count),
       data[178..<188].allSatisfy({ $0 == 0 }) else {
       throw ControlWireError.invalid("Inspector result request mismatch")
@@ -146,6 +145,32 @@ struct InspectorResult: Sendable {
     let count: UInt32 = try r.integer(140)
     guard count <= 2 else { throw ControlWireError.invalid("Inspector evidence count overflow") }
     let fcpAttempt: UInt64 = try r.integer(64)
+    if stages & 0x02 == 0 {
+      // GetInspectorResult publishes only after terminal observation AND
+      // submission closure. A strictly correlated rejection before route
+      // binding completes the query without establishing a deck observation.
+      // Never accept a partially bound/transmitted attempt via this exception:
+      // its absent or mismatched route must retain the uncertainty quarantine.
+      guard stages == 0x21, status != 0, UInt32(bitPattern: status) != 0xe00002d8,
+        classification == 0, routeState == 0, responseOverflow == 0, count == 0,
+        data[48..<80].allSatisfy({ $0 == 0 }),
+        data[88..<104].allSatisfy({ $0 == 0 }),
+        try r.integer(112, as: UInt32.self) == 0,
+        try r.integer(148, as: UInt16.self) == UInt16.max,
+        data[156..<188].allSatisfy({ $0 == 0 }),
+        data[196..<Self.wireBytes].allSatisfy({ $0 == 0 }) else {
+        throw ControlWireError.invalid("Inspector unbound terminal failure mismatch")
+      }
+      events = []
+      return
+    }
+    guard try r.integer(112, as: UInt32.self) == route.generation,
+      try r.integer(148, as: UInt16.self) == route.nodeID,
+      route.deviceIncarnation != 0, route.routeEpoch != 0,
+      try r.integer(48, as: UInt64.self) == route.deviceIncarnation,
+      try r.integer(56, as: UInt64.self) == route.routeEpoch else {
+      throw ControlWireError.invalid("Inspector result route mismatch")
+    }
     var resultEvents: [Event] = []
     for index in 0..<Int(count) {
       let offset = 196 + index * 544

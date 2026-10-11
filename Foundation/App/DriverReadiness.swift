@@ -1,6 +1,38 @@
 // Copyright 2026 Rewind Digital, LLC. SPDX-License-Identifier: Apache-2.0
 import Foundation
 
+/// A verified archive alone never starts polling. The pause spans route changes;
+/// explicit resume can clear storage exhaustion, but never a route/control error.
+struct PassiveObservationRecoveryGate {
+  private(set) var awaitingResume = false
+  private(set) var archiveVerified = false
+  private(set) var failureRoute: FoundationRoute?
+  private(set) var storageBudgetFailed = false
+
+  static func isBudgetFailure(_ reason: String) -> Bool {
+    reason.hasPrefix("Passive status evidence budget full")
+      || reason.hasPrefix("Passive status evidence storage full")
+  }
+  mutating func failed(on route: FoundationRoute, storageBudget: Bool) {
+    failureRoute = route; storageBudgetFailed = storageBudget; archiveVerified = false
+  }
+  mutating func beginArchive() { awaitingResume = true; archiveVerified = false }
+  mutating func archiveCompleted() { archiveVerified = true }
+  func mayObserve(on route: FoundationRoute) -> Bool { !awaitingResume && failureRoute != route }
+  func canResume(on route: FoundationRoute) -> Bool {
+    awaitingResume && archiveVerified && (storageBudgetFailed || failureRoute == nil || failureRoute != route)
+  }
+  @discardableResult mutating func resume(on route: FoundationRoute) -> Bool {
+    guard canResume(on: route) else { return false }
+    awaitingResume = false; archiveVerified = false
+    if storageBudgetFailed { failureRoute = nil; storageBudgetFailed = false }
+    return true
+  }
+  static func mayRecoverTimecode(budgetFailure: Bool, failedRoute: FoundationRoute?, currentRoute: FoundationRoute?) -> Bool {
+    budgetFailure && failedRoute != nil && failedRoute == currentRoute
+  }
+}
+
 /// Local app ownership evidence. No device identity or filesystem paths.
 struct AppOperationObservation: Codable, Equatable, Sendable {
   var id = UUID()
