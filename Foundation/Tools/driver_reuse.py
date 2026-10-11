@@ -162,4 +162,11 @@ def app_only_project(project):
                 raise ValueError('Unexpected source path in app-only projection')
             obj['path'] = str((source_root / path).resolve())
             obj['sourceTree'] = '<absolute>'
+    for config_id in objects[host['buildConfigurationList']]['buildConfigurations']:
+        settings = objects[config_id]['buildSettings']
+        for key in ('SWIFT_OBJC_BRIDGING_HEADER', 'CODE_SIGN_ENTITLEMENTS'):
+            path = settings.get(key)
+            if not path or Path(path).is_absolute():
+                raise ValueError('Unexpected host path in app-only projection')
+            settings[key] = str((source_root / path).resolve())
     return data
