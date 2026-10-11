@@ -11,7 +11,7 @@ Successful PAL capture and whole-tape NTSC capture are documented with measured 
 <!-- project-status:start -->
 **Current development:** rewindDV 0.1.12 (Beta). App build 202; driver build 203. [Reviewed public source](https://github.com/rewinddv/rewindDV/tree/2ed7245de91358331156a316e5652ad14ed7fcfa).
 
-**Latest public download:** [Alpha 0.0.96 / Driver B193](https://github.com/rewinddv/rewindDV/releases/tag/alpha-0.0.96) — engineering prerelease, Developer ID-signed and notarized. App build 190 includes the matching driver. Use normal macOS approval; no SIP change is required. Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.
+**Latest public download:** [Beta 0.1.12 / Driver B203](https://github.com/rewinddv/rewindDV/releases/tag/beta-0.1.12) — engineering prerelease, Developer ID-signed and notarized. App build 202 includes the matching driver. Use normal macOS approval; no SIP change is required. Offline playback, Surgery and inspection require no driver activation. Hardware qualification remains bounded.
 
 Development source and downloads have separate identities and qualification. Application versions and driver builds advance independently. [Machine-readable status](PROJECT-STATUS.json).
 <!-- project-status:end -->
